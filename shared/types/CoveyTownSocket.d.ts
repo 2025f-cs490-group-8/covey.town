@@ -17,6 +17,7 @@ export type TownJoinResponse = {
   interactables: TypedInteractable[];
 }
 
+
 export type InteractableType = 'ConversationArea' | 'ViewingArea' | 'TicTacToeArea' | 'ConnectFourArea' | 'QuantumTicTacToeArea';
 export interface Interactable {
   type: InteractableType;
@@ -135,15 +136,23 @@ export interface QuantumTicTacToeMove extends TicTacToeMove {
  * games to determine their score.
  */
 export interface QuantumTicTacToeGameState extends WinnableGameState {
+ status: GameStatus;         // REQUIRED
+  winner?: PlayerID;           // OPTIONAL (from WinnableGameState)
   moves: ReadonlyArray<QuantumTicTacToeMove>;
   x?: PlayerID;
   o?: PlayerID;
   xScore: number;
   oScore: number;
+  moveCount: number;
   publiclyVisible: {
     A: boolean[][];
     B: boolean[][];
     C: boolean[][];
+  };
+  games: {
+    A: TicTacToeGameState;
+    B: TicTacToeGameState;
+    C: TicTacToeGameState;
   };
 }
 
@@ -296,3 +305,4 @@ export interface ClientToServerEvents {
   interactableUpdate: (update: Interactable) => void;
   interactableCommand: (command: InteractableCommand & InteractableCommandBase) => void;
 }
+

@@ -24,6 +24,7 @@ class TestingGame extends Game<QuantumTicTacToeGameState, QuantumTicTacToeMove> 
       status: 'WAITING_TO_START',
       xScore: 0,
       oScore: 0,
+      moveCount: 0, // <-- missing
       publiclyVisible: {
         A: [
           [false, false, false],
@@ -41,7 +42,13 @@ class TestingGame extends Game<QuantumTicTacToeGameState, QuantumTicTacToeMove> 
           [false, false, false],
         ],
       },
+      games: {      // <-- missing
+        A: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+        B: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+        C: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+      },
     });
+
   }
 
   public applyMove(): void {}

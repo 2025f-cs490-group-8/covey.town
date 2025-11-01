@@ -211,6 +211,8 @@ export class TownsController extends Controller {
 
     const newPlayer = await town.addPlayer(userName, socket);
     assert(newPlayer.videoToken);
+    console.log('Generated token:', newPlayer.videoToken);
+console.log('Identity:', newPlayer.userName);
     socket.emit('initialize', {
       userID: newPlayer.id,
       sessionToken: newPlayer.sessionToken,

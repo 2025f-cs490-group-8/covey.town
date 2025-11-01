@@ -2,7 +2,13 @@ import { BroadcastOperator } from 'socket.io';
 
 import { mock, mockDeep, MockProxy } from 'jest-mock-extended';
 import { nanoid } from 'nanoid';
-import { SocketReservedEventsMap } from 'socket.io/dist/socket';
+import { Socket } from 'socket.io';
+type SocketReservedEventsMap = {
+  connect: (...args: any[]) => void;
+  disconnect: (...args: any[]) => void;
+  disconnecting: (...args: any[]) => void;
+  reconnect: (...args: any[]) => void;
+};
 import {
   EventNames,
   EventParams,

@@ -12,6 +12,10 @@ import Player from '../../lib/Player';
  * This class acts as a controller for three underlying TicTacToeGame instances, orchestrating the "quantum" rules by taking
  * the role of the monitor.
  */
+
+
+
+
 export default class QuantumTicTacToeGame extends Game<
   QuantumTicTacToeGameState,
   QuantumTicTacToeMove
@@ -24,15 +28,61 @@ export default class QuantumTicTacToeGame extends Game<
 
   private _moveCount: number;
 
-  public constructor() {
-    // TODO: implement me
+ public constructor() {
+    super({
+    status: 'WAITING_TO_START',
+    winner: undefined,
+    moves: [],
+    x: undefined,
+    o: undefined,
+    xScore: 0,
+    oScore: 0,
+    moveCount: 0,
+    publiclyVisible: {
+      A: Array(3).fill(0).map(() => Array(3).fill(false)),
+      B: Array(3).fill(0).map(() => Array(3).fill(false)),
+      C: Array(3).fill(0).map(() => Array(3).fill(false)),
+    },
+    games: {
+      A: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+      B: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+      C: { moves: [], status: 'WAITING_TO_START', x: undefined, o: undefined },
+    },
+  } as QuantumTicTacToeGameState);
+
+  // Keep your private fields if you need them separately
+  this._games = {
+    A: new TicTacToeGame(),
+    B: new TicTacToeGame(),
+    C: new TicTacToeGame(),
+  };
+  this._xScore = 0;
+  this._oScore = 0;
+  this._moveCount = 0;
+}
+
+  public _join(player: Player): void {
+ // Check if player is already in the game
+  if (this.state.x === player.id || this.state.o === player.id) {
+    throw new Error('Player is already in the game');
   }
 
-  protected _join(player: Player): void {
-    // TODO: implement me
+  // Assign player to X or O
+  if (!this.state.x) {
+    this.state = { ...this.state, x: player.id };
+  } else if (!this.state.o) {
+    this.state = { ...this.state, o: player.id };
+  } else {
+    // Game is full
+    throw new Error('Game is full');
   }
 
-  protected _leave(player: Player): void {
+  // If both players are in, start the game
+  if (this.state.x && this.state.o) {
+    this.state = { ...this.state, status: 'IN_PROGRESS' };  
+  }
+
+  }public _leave(player: Player): void {
     // TODO: implement me
   }
 
