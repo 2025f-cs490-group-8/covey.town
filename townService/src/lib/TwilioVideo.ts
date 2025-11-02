@@ -60,7 +60,7 @@ export default class TwilioVideo implements IVideoClient {
       this._twilioApiKeySID,
       this._twilioApiKeySecret,
       {
-        identity: clientIdentity, 
+        identity: clientIdentity,
         ttl: MAX_ALLOWED_SESSION_DURATION,
       },
     );

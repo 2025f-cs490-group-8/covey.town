@@ -1,14 +1,7 @@
-import { BroadcastOperator } from 'socket.io';
+import { BroadcastOperator, Socket } from 'socket.io';
 
 import { mock, mockDeep, MockProxy } from 'jest-mock-extended';
 import { nanoid } from 'nanoid';
-import { Socket } from 'socket.io';
-type SocketReservedEventsMap = {
-  connect: (...args: any[]) => void;
-  disconnect: (...args: any[]) => void;
-  disconnecting: (...args: any[]) => void;
-  reconnect: (...args: any[]) => void;
-};
 import {
   EventNames,
   EventParams,
@@ -30,6 +23,13 @@ import {
   TownEmitter,
   ViewingArea,
 } from './types/CoveyTownSocket';
+
+type SocketReservedEventsMap = {
+  connect: (...args: any[]) => void;
+  disconnect: (...args: any[]) => void;
+  disconnecting: (...args: any[]) => void;
+  reconnect: (...args: any[]) => void;
+};
 
 /**
  * Create a new conversation area using some random defaults

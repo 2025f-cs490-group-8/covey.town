@@ -506,15 +506,15 @@
                 {
                  "height":224,
                  "id":31,
-                 "name":"Quantum Tic Tac Toe 1",
+                 "name":"Tic Tac Toe 2",
                  "properties":[
                         {
                          "name":"type",
                          "type":"string",
-                         "value":"QuantumTicTacToe"
+                         "value":"TicTacToe"
                         }],
                  "rotation":0,
-                 "type":"GameArea",
+                 "type":"ConversationArea",
                  "visible":true,
                  "width":164.667,
                  "x":3482.99983333333,

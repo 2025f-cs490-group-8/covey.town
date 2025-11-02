@@ -30,11 +30,9 @@ import {
 import {
   isConnectFourArea,
   isConversationArea,
-  isQuantumTicTacToeArea,
   isTicTacToeArea,
   isViewingArea,
 } from '../types/TypeUtils';
-import QuantumTicTacToeAreaController from './interactable/QuantumTicTacToeAreaController';
 import ConnectFourAreaController from './interactable/ConnectFourAreaController';
 import ConversationAreaController from './interactable/ConversationAreaController';
 import GameAreaController, { GameEventTypes } from './interactable/GameAreaController';
@@ -632,10 +630,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
           } else if (isConnectFourArea(eachInteractable)) {
             this._interactableControllers.push(
               new ConnectFourAreaController(eachInteractable.id, eachInteractable, this),
-            );
-          } else if (isQuantumTicTacToeArea(eachInteractable)) {
-            this._interactableControllers.push(
-              new QuantumTicTacToeAreaController(eachInteractable.id, eachInteractable, this),
             );
           }
         });
