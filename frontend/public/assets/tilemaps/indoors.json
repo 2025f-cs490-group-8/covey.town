@@ -504,6 +504,23 @@
                  "y":1056.00016666667
                 }, 
                 {
+                 "height":224,
+                 "id":31,
+                 "name":"Tic Tac Toe 2",
+                 "properties":[
+                        {
+                         "name":"type",
+                         "type":"string",
+                         "value":"TicTacToe"
+                        }],
+                 "rotation":0,
+                 "type":"ConversationArea",
+                 "visible":true,
+                 "width":164.667,
+                 "x":3482.99983333333,
+                 "y":1058.66666666667
+                }, 
+                {
                  "height":123.333333333333,
                  "id":35,
                  "name":"Fish tank",
