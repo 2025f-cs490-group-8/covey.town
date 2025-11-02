@@ -1,4 +1,3 @@
-
 import assert from 'assert';
 import { generateKey } from 'crypto';
 import EventEmitter from 'events';
