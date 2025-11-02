@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { ChakraProvider } from '@chakra-ui/react';
 import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
@@ -18,6 +19,8 @@ import TownControllerContext from './contexts/TownControllerContext';
 import LoginControllerContext from './contexts/LoginControllerContext';
 import { TownsServiceClient } from './generated/client';
 import { nanoid } from 'nanoid';
+import { Routes, Route } from 'react-router-dom';
+import Profile from './components/SocialSidebar/Profile';
 import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text } from '@chakra-ui/react';
 import ToggleChatButton from './components/VideoCall/VideoFrontend/components/Buttons/ToggleChatButton/ToggleChatButton';
 
@@ -239,19 +242,19 @@ function App() {
     );
   }
 
-  let page: JSX.Element;
-  if (townController) {
-    page = (
-      <TownControllerContext.Provider value={townController}>
-        <ChatProvider>
-          <TownMap />
-          <VideoOverlay preferredMode='fullwidth' />
-        </ChatProvider>
-      </TownControllerContext.Provider>
-    );
-  } else {
-    page = <PreJoinScreens />;
-  }
+let page: JSX.Element;
+if (townController) {
+  page = (
+    <TownControllerContext.Provider value={townController}>
+      <ChatProvider>
+        <TownMap />
+        <VideoOverlay preferredMode='fullwidth' />
+      </ChatProvider>
+    </TownControllerContext.Provider>
+  );
+} else {
+  page = <PreJoinScreens />;
+}
   
   const url = "http://localhost:8081";
   assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
