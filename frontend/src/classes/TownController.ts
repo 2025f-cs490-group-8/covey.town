@@ -1,3 +1,4 @@
+
 import assert from 'assert';
 import { generateKey } from 'crypto';
 import EventEmitter from 'events';
@@ -30,11 +31,9 @@ import {
 import {
   isConnectFourArea,
   isConversationArea,
-  isQuantumTicTacToeArea,
   isTicTacToeArea,
   isViewingArea,
 } from '../types/TypeUtils';
-import QuantumTicTacToeAreaController from './interactable/QuantumTicTacToeAreaController';
 import ConnectFourAreaController from './interactable/ConnectFourAreaController';
 import ConversationAreaController from './interactable/ConversationAreaController';
 import GameAreaController, { GameEventTypes } from './interactable/GameAreaController';
@@ -226,7 +225,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         */
     this.setMaxListeners(30);
 
-    const url = 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     assert(url);
     this._socket = io(url, { auth: { userName, townID } });
     this._townsService = new TownsServiceClient({ BASE: url }).towns;
@@ -632,10 +631,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
           } else if (isConnectFourArea(eachInteractable)) {
             this._interactableControllers.push(
               new ConnectFourAreaController(eachInteractable.id, eachInteractable, this),
-            );
-          } else if (isQuantumTicTacToeArea(eachInteractable)) {
-            this._interactableControllers.push(
-              new QuantumTicTacToeAreaController(eachInteractable.id, eachInteractable, this),
             );
           }
         });
