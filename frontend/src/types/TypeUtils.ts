@@ -1,8 +1,8 @@
+
 import {
   ConversationArea,
   Interactable,
   TicTacToeGameState,
-  QuantumTicTacToeGameState,
   ViewingArea,
   GameArea,
   ConnectFourGameState,
@@ -26,11 +26,6 @@ export function isTicTacToeArea(
   interactable: Interactable,
 ): interactable is GameArea<TicTacToeGameState> {
   return interactable.type === 'TicTacToeArea';
-}
-export function isQuantumTicTacToeArea(
-  interactable: Interactable,
-): interactable is GameArea<QuantumTicTacToeGameState> {
-  return interactable.type === 'QuantumTicTacToeArea';
 }
 export function isConnectFourArea(
   interactable: Interactable,
