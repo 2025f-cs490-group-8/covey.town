@@ -1,9 +1,16 @@
 
 import { createPool } from 'mysql2/promise'; 
-import * as CryptoJS from 'crypto-js';
+ import * as bcrypt from 'bcrypt';
 
-function constructMD5Hash(password: string) {
-    return CryptoJS.MD5(password).toString();
+function constructBCRYPTHash(password: string) {
+    const salt = 10;
+    bcrypt.hash(password, salt, (err: Error | undefined, hash: string) => {
+        if (err) {
+            console.error('Error hashing password:', err);
+            return;
+        }
+        return hash;
+    });
 }
 
 export const connection = createPool({
@@ -27,6 +34,10 @@ export class UserRepository {
         }
     }
 
+    /**
+     * id is taken care of through mysql and status has on offline default value.
+     * 
+     */
     async constructNewUser(userName: string, email: string, userPassword: string) {
         try {
             const hash = constructMD5Hash(userPassword)
@@ -34,9 +45,11 @@ export class UserRepository {
             const row = await connection.execute(query);
             return row;
         } catch (error) {
-            console.error('Error fetching users:', error);
+            console.error('Error constructing user:', error);
             throw error;
         }
     }
-          
+
+
+
 }
