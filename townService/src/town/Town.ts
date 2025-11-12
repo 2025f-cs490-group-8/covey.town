@@ -10,12 +10,16 @@ import {
   ChatMessage,
   ConversationArea as ConversationAreaModel,
   CoveyTownSocket,
+  FriendRequestNotification,
+  FriendRequestUpdate,
   Interactable,
   InteractableCommand,
   InteractableCommandBase,
+  PlayerID,
   PlayerLocation,
   ServerToClientEvents,
   SocketData,
+  UserStatus,
   ViewingArea as ViewingAreaModel,
 } from '../types/CoveyTownSocket';
 import { logError } from '../Utils';
@@ -95,6 +99,16 @@ export default class Town {
 
   private _chatMessages: ChatMessage[] = [];
 
+  /** Map of player IDs to their sockets for direct messaging */
+  private _playerSockets: Map<PlayerID, CoveyTownSocket> = new Map();
+
+  /** Map of pending friend requests: requestID -> { fromPlayerID, toPlayerID, fromPlayerName } */
+  private _pendingFriendRequests: Map<string, {
+    fromPlayerID: PlayerID;
+    toPlayerID: PlayerID;
+    fromPlayerName: string;
+  }> = new Map();
+
   constructor(
     friendlyName: string,
     isPubliclyListed: boolean,
@@ -120,6 +134,7 @@ export default class Town {
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
+    this._playerSockets.set(newPlayer.id, socket);
 
     // Create a video token for this user to join this town
     newPlayer.videoToken = await this._videoClient.getTokenForTown(this._townID, newPlayer.id);
@@ -133,6 +148,8 @@ export default class Town {
     socket.on('disconnect', () => {
       this._removePlayer(newPlayer);
       this._connectedSockets.delete(socket);
+      this._playerSockets.delete(newPlayer.id);
+      this._clearPendingFriendRequestsForPlayer(newPlayer.id);
     });
 
     // Set up a listener to forward all chat messages to all clients in the town
@@ -214,6 +231,25 @@ export default class Town {
         });
       }
     });
+
+    // Set up friend request handlers
+    socket.on('sendFriendRequest', (toPlayerID: PlayerID) => {
+      this._handleFriendRequest(newPlayer.id, toPlayerID);
+    });
+
+    socket.on('respondFriendRequest', (requestID: string, accept: boolean) => {
+      this._handleFriendRequestResponse(newPlayer.id, requestID, accept);
+    });
+
+    // Set up status update handler
+    socket.on('updateStatus', (status: UserStatus) => {
+      newPlayer.status = status;
+      // Broadcast status update to all players (friends will see it in their friends list)
+      this._broadcastEmitter.emit('playerStatusUpdated', newPlayer.id, status);
+      // Also update the player model in the playerMoved event so it's included in future updates
+      this._broadcastEmitter.emit('playerMoved', newPlayer.toPlayerModel());
+    });
+
     return newPlayer;
   }
 
@@ -228,6 +264,181 @@ export default class Town {
     }
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
+  }
+
+  /**
+   * Handles sending a friend request from one player to another
+   */
+  private _handleFriendRequest(fromPlayerID: PlayerID, toPlayerID: PlayerID): void {
+    const fromPlayer = this._players.find(p => p.id === fromPlayerID);
+    const toPlayer = this._players.find(p => p.id === toPlayerID);
+
+    if (!fromPlayer || !toPlayer) {
+      return; // One of the players doesn't exist
+    }
+
+    if (fromPlayerID === toPlayerID) {
+      return; // Can't send request to yourself
+    }
+
+    if (fromPlayer.isFriend(toPlayerID)) {
+      return; // Already friends
+    }
+
+    // Check if there's already a pending request
+    const existingRequest = Array.from(this._pendingFriendRequests.values())
+      .find(req => 
+        (req.fromPlayerID === fromPlayerID && req.toPlayerID === toPlayerID) ||
+        (req.fromPlayerID === toPlayerID && req.toPlayerID === fromPlayerID)
+      );
+
+    if (existingRequest) {
+      return; // Request already exists
+    }
+
+    // Create a new friend request
+    const requestID = nanoid();
+    this._pendingFriendRequests.set(requestID, {
+      fromPlayerID,
+      toPlayerID,
+      fromPlayerName: fromPlayer.userName,
+    });
+
+    // Notify the recipient
+    const toSocket = this._playerSockets.get(toPlayerID);
+    if (toSocket) {
+      const notification: FriendRequestNotification = {
+        fromPlayerID,
+        fromPlayerName: fromPlayer.userName,
+        requestID,
+      };
+      console.log(`[Friend Request] Sending notification to ${toPlayerID} from ${fromPlayerID}:`, notification);
+      console.log(`[Friend Request] Socket connected: ${toSocket.connected}, Socket ID: ${toSocket.id}`);
+      toSocket.emit('friendRequestReceived', notification);
+      console.log(`[Friend Request] Event emitted successfully`);
+    } else {
+      console.log(`[Friend Request] ERROR: No socket found for player ${toPlayerID}`);
+      console.log(`[Friend Request] Available player sockets:`, Array.from(this._playerSockets.keys()));
+      console.log(`[Friend Request] Current players in town:`, this._players.map(p => ({ id: p.id, name: p.userName })));
+    }
+  }
+
+  /**
+   * Handles a response to a friend request (accept or deny)
+   */
+  private _handleFriendRequestResponse(
+    respondingPlayerID: PlayerID,
+    requestID: string,
+    accept: boolean,
+  ): void {
+    const request = this._pendingFriendRequests.get(requestID);
+    if (!request) {
+      return; // Request doesn't exist
+    }
+
+    // Verify the responding player is the recipient
+    if (request.toPlayerID !== respondingPlayerID) {
+      return; // Not authorized to respond to this request
+    }
+
+    const fromPlayer = this._players.find(p => p.id === request.fromPlayerID);
+    const toPlayer = this._players.find(p => p.id === request.toPlayerID);
+
+    if (!fromPlayer || !toPlayer) {
+      // One of the players left, clean up
+      this._pendingFriendRequests.delete(requestID);
+      return;
+    }
+
+    // Remove the pending request
+    this._pendingFriendRequests.delete(requestID);
+
+    if (accept) {
+      // Add each other as friends
+      fromPlayer.addFriend(toPlayer.id);
+      toPlayer.addFriend(fromPlayer.id);
+
+      // Notify both players of the updated friend list
+      this._notifyFriendList(fromPlayer.id);
+      this._notifyFriendList(toPlayer.id);
+    }
+
+    // Notify the sender of the response
+    const fromSocket = this._playerSockets.get(request.fromPlayerID);
+    if (fromSocket) {
+      const update: FriendRequestUpdate = {
+        requestID,
+        fromPlayerID: request.fromPlayerID,
+        toPlayerID: request.toPlayerID,
+        status: accept ? 'accepted' : 'denied',
+      };
+      fromSocket.emit('friendRequestUpdated', update);
+    }
+  }
+
+  /**
+   * Clears all pending friend requests involving a specific player
+   */
+  private _clearPendingFriendRequestsForPlayer(playerID: PlayerID): void {
+    const requestsToRemove: string[] = [];
+    this._pendingFriendRequests.forEach((request, requestID) => {
+      if (request.fromPlayerID === playerID || request.toPlayerID === playerID) {
+        requestsToRemove.push(requestID);
+      }
+    });
+    requestsToRemove.forEach(requestID => {
+      this._pendingFriendRequests.delete(requestID);
+    });
+  }
+
+  /**
+   * Notifies a player of their updated friend list
+   */
+  private _notifyFriendList(playerID: PlayerID): void {
+    const player = this._players.find(p => p.id === playerID);
+    if (!player) {
+      return;
+    }
+
+    const friendIDs = player.getFriends();
+    const friends = this._players
+      .filter(p => friendIDs.includes(p.id))
+      .map(p => p.toPlayerModel());
+
+    const socket = this._playerSockets.get(playerID);
+    if (socket) {
+      socket.emit('friendListUpdated', friends);
+    }
+  }
+
+  /**
+   * Get friends for a player (as Player models)
+   */
+  public getFriendsForPlayer(playerID: PlayerID): Player[] {
+    const player = this._players.find(p => p.id === playerID);
+    if (!player) {
+      return [];
+    }
+
+    const friendIDs = player.getFriends();
+    return this._players.filter(p => friendIDs.includes(p.id));
+  }
+
+  /**
+   * Get pending friend requests for a player
+   */
+  public getPendingFriendRequestsForPlayer(playerID: PlayerID): FriendRequestNotification[] {
+    const requests: FriendRequestNotification[] = [];
+    this._pendingFriendRequests.forEach((request, requestID) => {
+      if (request.toPlayerID === playerID) {
+        requests.push({
+          fromPlayerID: request.fromPlayerID,
+          fromPlayerName: request.fromPlayerName,
+          requestID,
+        });
+      }
+    });
+    return requests;
   }
 
   /**

@@ -221,6 +221,8 @@ console.log('Identity:', newPlayer.userName);
       friendlyName: town.friendlyName,
       isPubliclyListed: town.isPubliclyListed,
       interactables: town.interactables.map(eachInteractable => eachInteractable.toModel()),
+      friends: town.getFriendsForPlayer(newPlayer.id).map(friend => friend.toPlayerModel()),
+      pendingFriendRequests: town.getPendingFriendRequestsForPlayer(newPlayer.id),
     });
   }
 }
