@@ -8,7 +8,7 @@ async function constructBCRYPTHash(password: string) {
 }
 
 export const connection = createPool({
-  host: process.env.DB_HOST || 'localhost',
+  host: process.env.DB_HOST || 'covey-town.c1e4guig85zc.us-east-2.rds.amazonaws.com',
   port: parseInt(process.env.DB_PORT || '3306', 10),
   user: process.env.DB_USER || 'admin',
   password: process.env.DB_PASSWORD || 'epicgamer12',
@@ -70,7 +70,7 @@ export class QuerySQL {
    */
   async constructNewUser(userName: string, email: string, userPassword: string) {
     try {
-      const hash = constructBCRYPTHash(userPassword);
+      const hash = await constructBCRYPTHash(userPassword);
       const query = 'INSERT INTO Users (userName, email, hash) VALUES (?, ?, ?)';
       await connection.execute(query, [userName, email, hash]);
     } catch (error) {
@@ -105,6 +105,7 @@ export class QuerySQL {
         friendIDs.add(i.sender);
         friendIDs.add(i.receiver);
       }
+      friendIDs.delete(uid);
       return friendIDs;
     } catch (error) {
       console.error('Error fetching friends list:', error);
@@ -138,7 +139,7 @@ export class QuerySQL {
 
   /**
    * this will directly delete the request from our database, can be used to unadd someone, if a user wishes to block a friend, call
-   * blockUser() instead.
+   * blockUser() instead. also implicitly deletes friend relation so it can be used to remove friends.
    */
   async declineFriendRequest(sender: number, receiver: number) {
     const request = await this.getFriendRequest(sender, receiver);
@@ -153,7 +154,8 @@ export class QuerySQL {
   }
 
   /**
-   * if a user chooses to block someone during a friendrequest prompt only call declineFriendRequest() first then this
+   * if a user chooses to block someone during a friendrequest prompt only call declineFriendRequest() first then this or if they
+   * wish to block them in general call declineFriendRequest first.
    */
   async blockUser(blocker: number, blocked: number) {
     try {
