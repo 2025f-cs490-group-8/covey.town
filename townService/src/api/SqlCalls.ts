@@ -56,8 +56,8 @@ export class QuerySQL {
     async passwordChallenge(userPassword: string, uid: number) {
         const hashRequest =  await this.getUserHash(uid);
         const storedHash = hashRequest.hash;
-        const hash = await bcrypt.hash(userPassword, 10); 
-        return hash === storedHash;
+        const match = await bcrypt.compare(userPassword, storedHash)
+        return match;
     }
 
     async setUserStatus(uid: number, status: string) {
