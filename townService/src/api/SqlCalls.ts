@@ -21,6 +21,14 @@ export const connection = createPool({
     database: process.env.DB_NAME || 'COVEYTOWN',
 });
 
+process.on('SIGTERM', () => {
+  console.log('Closing database connection pool...');
+  connection.end();
+});
+/**
+ * in case we want to split up this class into different files
+ */
+export default connection;
 
 export class QuerySQL {
     async getUser(uid: number) {
@@ -45,6 +53,13 @@ export class QuerySQL {
         } 
     }
 
+    async passwordChallenge(userPassword: string, uid: number) {
+        const hashRequest =  await this.getUserHash(uid);
+        const storedHash = hashRequest.hash;
+        const hash = await bcrypt.hash(userPassword, 10); 
+        return hash === storedHash;
+    }
+
     async setUserStatus(uid: number, status: string) {
         try {
             const query = 'UPDATE Users SET status = ? WHERE id = ?'; 
@@ -55,11 +70,11 @@ export class QuerySQL {
         } 
     }
     /**
-     * id is taken care of through mysql and status has on offline default value.
+     * id is taken care of through mysql and status has an offline default value.
      */
     async constructNewUser(userName: string, email: string, userPassword: string) {
         try {
-            const hash = constructBCRYPTHash(userPassword)
+            const hash = constructBCRYPTHash(userPassword);
             const query = 'INSERT INTO Users (userName, email, hash) VALUES (?, ?, ?)'; 
             await connection.execute(query, [userName, email, hash]);
         } catch (error) {
@@ -80,13 +95,13 @@ export class QuerySQL {
         } 
     }
     /**
-     * There is probably a better solution to this that involves restructuring the database
+     * There is probably a better solution to this that involves restructuring the database, as is returns id of friends
      */
-    async getFriendsList(uid: number){
+    async getFriendsList(uid: number) {
         try {
             const query = 'SELECT sender, receiver FROM FriendRequests WHERE (sender = ? OR receiver = ?) AND status = ?'; 
             const [row] = await connection.execute<any[]>(query, [uid, uid, 'accepted']);
-            const friendIDs = new Set<number>()
+            const friendIDs = new Set<number>();
             for (const i of row){
                 friendIDs.add(i.sender);
                 friendIDs.add(i.receiver);
@@ -97,7 +112,7 @@ export class QuerySQL {
             throw error;
         }
     }
-    async getFriendRequest(sender: number, receiver: number){
+    async getFriendRequest(sender: number, receiver: number) {
         try {
             const query = 'SELECT requestID, status, timeSent FROM FriendRequests WHERE sender = ? AND receiver = ?';
             const [row] = await connection.execute<any[]>(query, [sender, receiver]);
@@ -107,9 +122,9 @@ export class QuerySQL {
             throw error;
         }
     }
-    async acceptFriendRequest(sender: number, receiver: number){
+    async acceptFriendRequest(sender: number, receiver: number) {
         const request = await this.getFriendRequest(sender, receiver);
-        const rID = request.requestID
+        const rID = request.requestID;
         try {
             const query = 'UPDATE FriendRequests SET status = ? WHERE requestID = ?'; 
             await connection.execute(query, ['accepted', rID]);
@@ -122,19 +137,50 @@ export class QuerySQL {
      * this will directly delete the request from our database, can be used to unadd someone, if a user wishes to block a friend, call
      * blockUser() instead.
      */
-    async declineFriendRequest(requestID: number){
-        return;
+    async declineFriendRequest(sender: number, receiver: number) {
+        const request = await this.getFriendRequest(sender, receiver);
+        const rID = request.requestID;
+        try {
+            const query = 'DELETE FROM FriendRequests WHERE requestID = ?'; 
+            await connection.execute(query, [rID]);
+        } catch (error) {
+            console.error('Error declining request:', error);
+            throw error;
+        }
     }
     /**
-     * if a user chooses to block someone during a friendrequest prompt only call blockuser it declines and deletes the request for you
+     * if a user chooses to block someone during a friendrequest prompt only call declineFriendRequest() first then this
      */
-    async blockUser(){
-        return;
+    async blockUser(blocker: number, blocked: number) {
+        try {
+            const query = 'INSERT INTO BlockedUsers (blocker, blocked) VALUES (?, ?)'; 
+            await connection.execute(query, [blocker, blocked]);
+        } catch (error) {
+            console.error('Error blocking user:', error);
+            throw error;
+        } 
+    }
+
+    async getBlockedList(blocker: number) {
+        try {
+            const query = 'SELECT * FROM BlockedUsers WHERE blocker = ?';
+            const [row] = await connection.execute<any[]>(query, [blocker]);
+            return row;
+        } catch (error) {
+            console.error('Error fetching blocked list:', error);
+            throw error;
+        }
     }
     /**
      * deletes blocked relationship from table
      */
-    async unblockUser(){
-        return;
+    async unblockUser(blocker: number, blocked: number){
+        try {
+            const query = 'DELETE FROM BlockedUsers WHERE blocker = ? AND blocked = ?'; 
+            await connection.execute(query, [blocker, blocked]);
+        } catch (error) {
+            console.error('Error unblocking user:', error);
+            throw error;
+        }
     }
 }
