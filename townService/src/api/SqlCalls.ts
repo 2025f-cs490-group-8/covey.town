@@ -22,43 +22,37 @@ export const connection = createPool({
 });
 
 
-export class UserRepository {
+export class QuerySQL {
     async getUser(uid: number) {
         try {
-            const query = 'SELECT userName, email, status FROM Users WHERE id = ' + uid; 
-            const row = await connection.execute(query);
-            return row;
+            const query = 'SELECT userName, email, status FROM Users WHERE id = ?'; 
+            const [row] = await connection.execute<any[]>(query, [uid]);
+            return row[0];
         } catch (error) {
             console.error('Error fetching user:', error);
             throw error;
-        } finally {
-            await connection.end();
-        }
+        } 
     }
 
     protected async getUserHash(uid: number) {
         try {
-            const query = 'SELECT hash FROM Users WHERE id = ' + uid; 
-            const row = await connection.execute(query);
-            return row;
+            const query = 'SELECT hash FROM Users WHERE id = ?'; 
+            const [row] = await connection.execute<any[]>(query, [uid]);
+            return row[0];
         } catch (error) {
             console.error('Error fetching hash:', error);
             throw error;
-        } finally {
-            await connection.end();
-        }
+        } 
     }
 
     async setUserStatus(uid: number, status: string) {
         try {
-            const query = 'UPDATE Users SET status = ' + status + ' WHERE id = ' + uid; 
-            await connection.execute(query);
+            const query = 'UPDATE Users SET status = ? WHERE id = ?'; 
+            await connection.execute(query, [status, uid]);
         } catch (error) {
             console.error('Error updating user status:', error);
             throw error;
-        } finally {
-            await connection.end();
-        }
+        } 
     }
     /**
      * id is taken care of through mysql and status has on offline default value.
@@ -66,44 +60,69 @@ export class UserRepository {
     async constructNewUser(userName: string, email: string, userPassword: string) {
         try {
             const hash = constructBCRYPTHash(userPassword)
-            const query = 'INSERT INTO Users (userName, email, hash) VALUES (' + userName + ', ' + email + ', ' + hash + ')'; 
-            await connection.execute(query);
+            const query = 'INSERT INTO Users (userName, email, hash) VALUES (?, ?, ?)'; 
+            await connection.execute(query, [userName, email, hash]);
         } catch (error) {
             console.error('Error constructing user:', error);
             throw error;
-        } finally {
-            await connection.end();
-        }
+        } 
     }
     /**
      * default pending status
      */
-    async constructNewFriendRequest(sender: string, receiver: string) {
+    async constructNewFriendRequest(sender: number, receiver: number) {
         try {
-            const query = 'INSERT INTO FriendRequests (sender, receiver) VALUES (' + sender + ', ' + receiver + ')'; 
-            await connection.execute(query);
+            const query = 'INSERT INTO FriendRequests (sender, receiver) VALUES (?, ?)'; 
+            await connection.execute(query, [sender, receiver]);
         } catch (error) {
             console.error('Error constructing friend request:', error);
             throw error;
-        } finally {
-            await connection.end();
+        } 
+    }
+    /**
+     * There is probably a better solution to this that involves restructuring the database
+     */
+    async getFriendsList(uid: number){
+        try {
+            const query = 'SELECT sender, receiver FROM FriendRequests WHERE (sender = ? OR receiver = ?) AND status = ?'; 
+            const [row] = await connection.execute<any[]>(query, [uid, uid, 'accepted']);
+            const friendIDs = new Set<number>()
+            for (const i of row){
+                friendIDs.add(i.sender);
+                friendIDs.add(i.receiver);
+            }
+            return friendIDs;
+        } catch (error) {
+            console.error('Error fetching friends list:', error);
+            throw error;
+        }
+    }
+    async getFriendRequest(sender: number, receiver: number){
+        try {
+            const query = 'SELECT requestID, status, timeSent FROM FriendRequests WHERE sender = ? AND receiver = ?';
+            const [row] = await connection.execute<any[]>(query, [sender, receiver]);
+            return row[0];
+        } catch (error) {
+            console.error('Error fetching friend request:', error);
+            throw error;
+        }
+    }
+    async acceptFriendRequest(sender: number, receiver: number){
+        const request = await this.getFriendRequest(sender, receiver);
+        const rID = request.requestID
+        try {
+            const query = 'UPDATE FriendRequests SET status = ? WHERE requestID = ?'; 
+            await connection.execute(query, ['accepted', rID]);
+        } catch (error) {
+            console.error('Error updating request status:', error);
+            throw error;
         }
     }
     /**
-     * note for ryan: need to get block sender and reciever and run list operations on it should return status's as well for ease.
-     */
-    async getFriendsList(){
-        return;
-    }
-
-    async acceptFriendRequest(){
-        return;
-    }
-    /**
-     * this will directly delete the request from our database, can be used to unadd someone, if a user wishes to clock a friend call
+     * this will directly delete the request from our database, can be used to unadd someone, if a user wishes to block a friend, call
      * blockUser() instead.
      */
-    async declineFriendRequest(){
+    async declineFriendRequest(requestID: number){
         return;
     }
     /**
