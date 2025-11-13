@@ -40,9 +40,8 @@ export default function FriendRequestNotificationCard(): JSX.Element {
     console.log('[FriendRequestNotification] Friend requests from controller:', townController.incomingFriendRequests);
     // Use controller directly as fallback
     const requests = friendRequests.length > 0 ? friendRequests : townController.incomingFriendRequests;
-    if (requests.length > 0) {
-      setDisplayedRequests([...requests]);
-    }
+    // Always sync with the current state (this handles removals too)
+    setDisplayedRequests([...requests]);
   }, [friendRequests, townController]);
 
   // Also listen directly to events as a backup
@@ -58,18 +57,30 @@ export default function FriendRequestNotificationCard(): JSX.Element {
       });
     };
 
+    // Listen for when requests are updated (accepted/denied) to remove them immediately
+    const handleFriendRequestUpdated = () => {
+      // Sync with controller's current state
+      setDisplayedRequests([...townController.incomingFriendRequests]);
+    };
+
     townController.addListener('friendRequestReceived', handleFriendRequestReceived);
+    townController.addListener('friendRequestUpdated', handleFriendRequestUpdated);
     
     return () => {
       townController.removeListener('friendRequestReceived', handleFriendRequestReceived);
+      townController.removeListener('friendRequestUpdated', handleFriendRequestUpdated);
     };
   }, [townController]);
 
   const handleAccept = (request: FriendRequestNotification) => {
+    // Remove from displayed requests immediately for instant feedback
+    setDisplayedRequests(prev => prev.filter(req => req.requestID !== request.requestID));
     townController.respondFriendRequest(request.requestID, true);
   };
 
   const handleDeny = (request: FriendRequestNotification) => {
+    // Remove from displayed requests immediately for instant feedback
+    setDisplayedRequests(prev => prev.filter(req => req.requestID !== request.requestID));
     townController.respondFriendRequest(request.requestID, false);
   };
 

@@ -66,9 +66,15 @@ export default function Profile(): JSX.Element {
   // Convert real friends to the format expected by the UI
   // Use the friend's actual status if available, otherwise check if they're in town
   const friends: Friend[] = realFriends.map(friend => {
-    // Use status from friend object if available, otherwise check if in town
-    let status: UserStatus = friend.status || 'Offline';
-    if (!friend.status) {
+    // Prioritize the friend's status from the server (which is updated via playerStatusUpdated events)
+    // If status is explicitly set (Online, Busy, or Offline), use it
+    // Otherwise, check if they're in town to determine Online/Offline
+    let status: UserStatus;
+    if (friend.status && (friend.status === 'Online' || friend.status === 'Busy' || friend.status === 'Offline')) {
+      // Use the friend's actual status (this is updated in real-time via playerStatusUpdated events)
+      status = friend.status;
+    } else {
+      // Fallback: check if friend is in town to determine status
       const isInTown = playersInTown.some(player => player.id === friend.id);
       status = isInTown ? 'Online' : 'Offline';
     }

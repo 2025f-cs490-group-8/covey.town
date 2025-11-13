@@ -448,6 +448,13 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
      */
     this._socket.on('playerDisconnect', disconnectedPlayer => {
       this._players = this.players.filter(eachPlayer => eachPlayer.id !== disconnectedPlayer.id);
+      // Update friend's status to Offline if they're in our friends list
+      // (This is a fallback in case the server's playerStatusUpdated event wasn't received)
+      const friendIndex = this._friends.findIndex(f => f.id === disconnectedPlayer.id);
+      if (friendIndex !== -1) {
+        this._friends[friendIndex] = { ...this._friends[friendIndex], status: 'Offline' };
+        this.emit('friendListUpdated', [...this._friends]);
+      }
     });
     /**
      * When a player moves, update local state and emit an event to the controller's event listeners
@@ -680,16 +687,23 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param accept Whether to accept (true) or deny (false) the request
    */
   public respondFriendRequest(requestID: string, accept: boolean): void {
+    // Find the request before removing it
+    const request = this._incomingFriendRequests.find(req => req.requestID === requestID);
+    
     this._socket.emit('respondFriendRequest', requestID, accept);
-    // Remove from incoming requests if we responded
-    if (accept) {
-      this._incomingFriendRequests = this._incomingFriendRequests.filter(
-        req => req.requestID !== requestID,
-      );
-    } else {
-      this._incomingFriendRequests = this._incomingFriendRequests.filter(
-        req => req.requestID !== requestID,
-      );
+    // Remove from incoming requests when we respond (both accept and deny)
+    this._incomingFriendRequests = this._incomingFriendRequests.filter(
+      req => req.requestID !== requestID,
+    );
+    // Emit an event so components can update immediately
+    // This ensures the notification disappears right away
+    if (request && this._userID) {
+      this.emit('friendRequestUpdated', {
+        requestID,
+        fromPlayerID: request.fromPlayerID,
+        toPlayerID: this._userID,
+        status: accept ? 'accepted' : 'denied',
+      });
     }
   }
 
