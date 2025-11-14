@@ -262,9 +262,6 @@ export default class Town {
     if (player.location.interactableID) {
       this._removePlayerFromInteractable(player);
     }
-    // Update player's status to Offline before removing them
-    // This ensures friends see the status change when the player disconnects
-    this._broadcastEmitter.emit('playerStatusUpdated', player.id, 'Offline');
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
   }
