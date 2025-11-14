@@ -337,14 +337,14 @@ export class TownsController extends Controller {
    * Get friend list for the current user
    * @param townID ID of the town
    * @param sessionToken session token of the player
-   * @returns list of friends
+   * @returns list of friends with their statuses
    */
   @Get('{townID}/friends')
   @Response<InvalidParametersError>(400, 'Invalid values specified')
   public async getFriends(
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
-  ): Promise<Array<{ friendId: string; friendUserName: string }>> {
+  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string }>> {
     const town = this._townsStore.getTownByID(townID);
     if (!town) {
       throw new InvalidParametersError('Invalid values specified');
@@ -354,8 +354,56 @@ export class TownsController extends Controller {
       throw new InvalidParametersError('Invalid values specified');
     }
 
+    const friends = this._friendsStore.getFriendsWithStatus(player.id);
+    return friends.map(f => ({
+      friendId: f.friendId,
+      friendUserName: f.friendUserName,
+      friendStatus: f.friendStatus,
+    }));
+  }
+
+  /**
+   * Update user status
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The new status
+   */
+  @Post('{townID}/status')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async updateUserStatus(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { status: 'Online' | 'Busy' | 'Offline' },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Validate status
+    if (!['Online', 'Busy', 'Offline'].includes(requestBody.status)) {
+      throw new InvalidParametersError('Invalid status value');
+    }
+
+    // Update status in store
+    this._friendsStore.setUserStatus(player.id, requestBody.status);
+
+    // Notify all friends of the status change
     const friends = this._friendsStore.getFriends(player.id);
-    return friends.map(f => ({ friendId: f.friendId, friendUserName: f.friendUserName }));
+    friends.forEach(friend => {
+      const friendPlayer = town.players.find(p => p.id === friend.friendId);
+      if (friendPlayer) {
+        town.emitUserStatusUpdate(friendPlayer.id, {
+          userId: player.id,
+          userName: player.userName,
+          status: requestBody.status,
+        });
+      }
+    });
   }
 
   /**
@@ -425,6 +473,10 @@ export class TownsController extends Controller {
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
 console.log('Identity:', newPlayer.userName);
+    
+    // Set default status to Online when user joins
+    this._friendsStore.setUserStatus(newPlayer.id, 'Online');
+    
     socket.emit('initialize', {
       userID: newPlayer.id,
       sessionToken: newPlayer.sessionToken,

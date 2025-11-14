@@ -18,6 +18,8 @@ export interface Friend {
   createdAt: Date;
 }
 
+export type UserStatus = 'Online' | 'Busy' | 'Offline';
+
 /**
  * Singleton store for managing friend lists and friend requests
  * Uses in-memory storage (in a real app, this would be a database)
@@ -30,6 +32,9 @@ export default class FriendsStore {
 
   // Map from userId to their pending friend requests (both sent and received)
   private _friendRequests: Map<string, FriendRequest[]> = new Map();
+
+  // Map from userId to their current status
+  private _userStatuses: Map<string, UserStatus> = new Map();
 
   static getInstance(): FriendsStore {
     if (FriendsStore._instance === undefined) {
@@ -183,6 +188,31 @@ export default class FriendsStore {
    */
   getFriends(userId: string): Friend[] {
     return this._friends.get(userId) || [];
+  }
+
+  /**
+   * Set user status
+   */
+  setUserStatus(userId: string, status: UserStatus): void {
+    this._userStatuses.set(userId, status);
+  }
+
+  /**
+   * Get user status (defaults to 'Offline' if not set)
+   */
+  getUserStatus(userId: string): UserStatus {
+    return this._userStatuses.get(userId) || 'Offline';
+  }
+
+  /**
+   * Get friends with their current statuses
+   */
+  getFriendsWithStatus(userId: string): Array<Friend & { friendStatus: UserStatus }> {
+    const friends = this.getFriends(userId);
+    return friends.map(friend => ({
+      ...friend,
+      friendStatus: this.getUserStatus(friend.friendId),
+    }));
   }
 
   /**
