@@ -26,7 +26,21 @@ import TownController from '../../classes/TownController';
 import useVideoContext from '../VideoCall/VideoFrontend/hooks/useVideoContext/useVideoContext';
 
 export default function TownSelection(): JSX.Element {
-  const [userName, setUserName] = useState<string>('');
+  // Check for Google user info from localStorage
+  const getGoogleUserName = (): string => {
+    try {
+      const googleUserStr = localStorage.getItem('googleUser');
+      if (googleUserStr) {
+        const googleUser = JSON.parse(googleUserStr);
+        return googleUser.name || googleUser.email || '';
+      }
+    } catch (e) {
+      // Ignore errors
+    }
+    return '';
+  };
+
+  const [userName, setUserName] = useState<string>(getGoogleUserName());
   const [newTownName, setNewTownName] = useState<string>('');
   const [newTownIsPublic, setNewTownIsPublic] = useState<boolean>(true);
   const [townIDToJoin, setTownIDToJoin] = useState<string>('');
