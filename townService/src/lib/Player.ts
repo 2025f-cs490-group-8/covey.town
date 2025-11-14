@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { Player as PlayerModel, PlayerID, PlayerLocation, TownEmitter, UserStatus } from '../types/CoveyTownSocket';
+import { Player as PlayerModel, PlayerLocation, TownEmitter } from '../types/CoveyTownSocket';
 
 /**
  * Each user who is connected to a town is represented by a Player object
@@ -22,12 +22,6 @@ export default class Player {
 
   /** A special town emitter that will emit events to the entire town BUT NOT to this player */
   public readonly townEmitter: TownEmitter;
-
-  /** Set of friend player IDs */
-  private _friends: Set<PlayerID> = new Set();
-
-  /** User's status (Online, Busy, Offline) */
-  private _status: UserStatus = 'Online';
 
   constructor(userName: string, townEmitter: TownEmitter) {
     this.location = {
@@ -67,49 +61,6 @@ export default class Player {
       id: this._id,
       location: this.location,
       userName: this._userName,
-      status: this._status,
     };
-  }
-
-  /**
-   * Add a friend to this player's friend list
-   */
-  addFriend(friendID: PlayerID): void {
-    this._friends.add(friendID);
-  }
-
-  /**
-   * Remove a friend from this player's friend list
-   */
-  removeFriend(friendID: PlayerID): void {
-    this._friends.delete(friendID);
-  }
-
-  /**
-   * Check if a player is a friend
-   */
-  isFriend(playerID: PlayerID): boolean {
-    return this._friends.has(playerID);
-  }
-
-  /**
-   * Get all friend IDs
-   */
-  getFriends(): PlayerID[] {
-    return Array.from(this._friends);
-  }
-
-  /**
-   * Get the player's status
-   */
-  get status(): UserStatus {
-    return this._status;
-  }
-
-  /**
-   * Set the player's status
-   */
-  set status(value: UserStatus) {
-    this._status = value;
   }
 }

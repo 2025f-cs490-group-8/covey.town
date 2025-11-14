@@ -24,9 +24,8 @@ import {
 } from '@chakra-ui/react';
 import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
-import FriendRequestNotification from './FriendRequestNotification';
-import { useFriends, usePlayers } from '../../classes/TownController';
-import { UserStatus } from '../../types/CoveyTownSocket';
+
+type UserStatus = 'Online' | 'Busy' | 'Offline';
 
 interface Friend {
   id: string;
@@ -48,36 +47,17 @@ export default function Profile(): JSX.Element {
     window.scrollTo(0, 0);
   }, []);
   
-  // Status management - sync with server
+  // Status management
   const [userStatus, setUserStatus] = useState<UserStatus>('Online');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Update status on server when user changes it
-  const handleStatusChange = (newStatus: UserStatus) => {
-    setUserStatus(newStatus);
-    townController.updateStatus(newStatus);
-  };
-  
-  // Get real friends from the friend system
-  const realFriends = useFriends();
-  // Get current players in town to check if friends are online
-  const playersInTown = usePlayers();
-  
-  // Convert real friends to the format expected by the UI
-  // Use the friend's actual status if available, otherwise check if they're in town
-  const friends: Friend[] = realFriends.map(friend => {
-    // Use status from friend object if available, otherwise check if in town
-    let status: UserStatus = friend.status || 'Offline';
-    if (!friend.status) {
-      const isInTown = playersInTown.some(player => player.id === friend.id);
-      status = isInTown ? 'Online' : 'Offline';
-    }
-    return {
-      id: friend.id,
-      username: friend.userName,
-      status,
-    };
-  });
+  // Mock friends list (in real app, this would come from backend)
+  const [friends, setFriends] = useState<Friend[]>([
+    { id: '1', username: 'Alice', status: 'Online' },
+    { id: '2', username: 'Bob', status: 'Busy' },
+    { id: '3', username: 'Charlie', status: 'Offline' },
+    { id: '4', username: 'Diana', status: 'Online' },
+  ]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
@@ -93,10 +73,7 @@ export default function Profile(): JSX.Element {
   );
 
   const removeFriend = (friendId: string) => {
-    // TODO: Implement remove friend functionality in TownController
-    // For now, this would need to call a backend endpoint to remove the friend
-    console.log('Remove friend:', friendId);
-    // Note: This would require backend support for removing friends
+    setFriends(friends.filter(f => f.id !== friendId));
   };
 
   return (
@@ -136,13 +113,13 @@ export default function Profile(): JSX.Element {
                 {userStatus}
               </MenuButton>
               <MenuList>
-                <MenuItem onClick={() => handleStatusChange('Online')}>
+                <MenuItem onClick={() => setUserStatus('Online')}>
                   <Badge colorScheme="green" mr={2}>●</Badge> Online
                 </MenuItem>
-                <MenuItem onClick={() => handleStatusChange('Busy')}>
+                <MenuItem onClick={() => setUserStatus('Busy')}>
                   <Badge colorScheme="red" mr={2}>●</Badge> Busy
                 </MenuItem>
-                <MenuItem onClick={() => handleStatusChange('Offline')}>
+                <MenuItem onClick={() => setUserStatus('Offline')}>
                   <Badge colorScheme="gray" mr={2}>●</Badge> Offline
                 </MenuItem>
               </MenuList>
@@ -189,9 +166,6 @@ export default function Profile(): JSX.Element {
               Add Friend
             </Button>
           </Flex>
-
-          {/* Friend Request Notifications */}
-          <FriendRequestNotification />
 
           {/* Search Bar */}
           <InputGroup mb={4}>

@@ -15,10 +15,6 @@ export type TownJoinResponse = {
   isPubliclyListed: boolean;
   /** Current state of interactables in this town */
   interactables: TypedInteractable[];
-  /** List of friends (player IDs) for this player */
-  friends: Player[];
-  /** List of pending friend requests for this player */
-  pendingFriendRequests: FriendRequestNotification[];
 }
 
 export type InteractableType = 'ConversationArea' | 'ViewingArea' | 'TicTacToeArea' | 'ConnectFourArea';
@@ -36,13 +32,10 @@ export type TownSettingsUpdate = {
 export type Direction = 'front' | 'back' | 'left' | 'right';
 
 export type PlayerID = string;
-export type UserStatus = 'Online' | 'Busy' | 'Offline';
-
 export interface Player {
   id: PlayerID;
   userName: string;
   location: PlayerLocation;
-  status?: UserStatus;
 };
 
 export type XY = { x: number, y: number };
@@ -171,19 +164,6 @@ export type ConnectFourColor = 'Red' | 'Yellow';
 export type InteractableID = string;
 export type GameInstanceID = string;
 
-export type FriendRequestNotification = {
-  fromPlayerID: PlayerID;
-  fromPlayerName: string;
-  requestID: string;
-};
-
-export type FriendRequestUpdate = {
-  requestID: string;
-  fromPlayerID: PlayerID;
-  toPlayerID: PlayerID;
-  status: 'accepted' | 'denied';
-};
-
 /**
  * Type for the result of a game
  */
@@ -281,10 +261,6 @@ export interface ServerToClientEvents {
   chatMessage: (message: ChatMessage) => void;
   interactableUpdate: (interactable: Interactable) => void;
   commandResponse: (response: InteractableCommandResponse) => void;
-  friendRequestReceived: (request: FriendRequestNotification) => void;
-  friendRequestUpdated: (update: FriendRequestUpdate) => void;
-  friendListUpdated: (friends: Player[]) => void;
-  playerStatusUpdated: (playerID: PlayerID, status: UserStatus) => void;
 }
 
 export interface ClientToServerEvents {
@@ -292,7 +268,4 @@ export interface ClientToServerEvents {
   playerMovement: (movementData: PlayerLocation) => void;
   interactableUpdate: (update: Interactable) => void;
   interactableCommand: (command: InteractableCommand & InteractableCommandBase) => void;
-  sendFriendRequest: (toPlayerID: PlayerID) => void;
-  respondFriendRequest: (requestID: string, accept: boolean) => void;
-  updateStatus: (status: UserStatus) => void;
 }

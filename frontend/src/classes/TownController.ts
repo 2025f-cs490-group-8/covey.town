@@ -16,19 +16,15 @@ import useTownController from '../hooks/useTownController';
 import {
   ChatMessage,
   CoveyTownSocket,
-  FriendRequestNotification,
-  FriendRequestUpdate,
   GameState,
   Interactable as InteractableAreaModel,
   InteractableCommand,
   InteractableCommandBase,
   InteractableCommandResponse,
   InteractableID,
-  Player,
   PlayerID,
   PlayerLocation,
   TownSettingsUpdate,
-  UserStatus,
   ViewingArea as ViewingAreaModel,
 } from '../types/CoveyTownSocket';
 import {
@@ -113,18 +109,6 @@ export type TownEvents = {
    * @param obj the interactable that is being interacted with
    */
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
-  /**
-   * An event that indicates that a friend request has been received
-   */
-  friendRequestReceived: (request: FriendRequestNotification) => void;
-  /**
-   * An event that indicates that a friend request response has been received
-   */
-  friendRequestUpdated: (update: FriendRequestUpdate) => void;
-  /**
-   * An event that indicates that the friend list has been updated
-   */
-  friendListUpdated: (friends: Player[]) => void;
 };
 
 /**
@@ -226,21 +210,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * An event emitter that broadcasts interactable-specific events
    */
   private _interactableEmitter = new EventEmitter();
-
-  /**
-   * List of friends (as Player models)
-   */
-  private _friends: Player[] = [];
-
-  /**
-   * List of incoming friend requests
-   */
-  private _incomingFriendRequests: FriendRequestNotification[] = [];
-
-  /**
-   * Set of outgoing friend request IDs (to track which requests we've sent)
-   */
-  private _outgoingFriendRequests: Set<string> = new Set();
 
   public constructor({ userName, townID, loginController }: ConnectionProperties) {
     super();
@@ -493,50 +462,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         console.trace(err);
       }
     });
-
-    /**
-     * When a friend request is received, add it to the incoming requests list and emit an event
-     */
-    this._socket.on('friendRequestReceived', (request: FriendRequestNotification) => {
-      console.log('[TownController] Friend request received via socket:', request);
-      this._incomingFriendRequests = [...this._incomingFriendRequests, request];
-      console.log('[TownController] Current incoming requests:', this._incomingFriendRequests);
-      this.emit('friendRequestReceived', request);
-    });
-
-    /**
-     * When a friend request response is received, remove it from outgoing requests and emit an event
-     */
-    this._socket.on('friendRequestUpdated', (update: FriendRequestUpdate) => {
-      this._outgoingFriendRequests.delete(update.requestID);
-      this.emit('friendRequestUpdated', update);
-    });
-
-    /**
-     * When the friend list is updated, update local state and emit an event
-     */
-    this._socket.on('friendListUpdated', (friends: Player[]) => {
-      this._friends = friends;
-      this.emit('friendListUpdated', friends);
-    });
-
-    /**
-     * When a player's status is updated, update local state
-     */
-    this._socket.on('playerStatusUpdated', (playerID: PlayerID, status: UserStatus) => {
-      // Update status in friends list if this player is a friend
-      const friendIndex = this._friends.findIndex(f => f.id === playerID);
-      if (friendIndex !== -1) {
-        this._friends[friendIndex] = { ...this._friends[friendIndex], status };
-        this.emit('friendListUpdated', [...this._friends]);
-      }
-      // Also update in players list
-      const player = this.players.find(p => p.id === playerID);
-      if (player) {
-        // PlayerController doesn't have status yet, but we can emit an event
-        this.emit('playerMoved', player);
-      }
-    });
   }
 
   /**
@@ -667,55 +592,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   }
 
   /**
-   * Send a friend request to another player
-   * @param toPlayerID The ID of the player to send the friend request to
-   */
-  public sendFriendRequest(toPlayerID: PlayerID): void {
-    this._socket.emit('sendFriendRequest', toPlayerID);
-  }
-
-  /**
-   * Respond to a friend request (accept or deny)
-   * @param requestID The ID of the friend request
-   * @param accept Whether to accept (true) or deny (false) the request
-   */
-  public respondFriendRequest(requestID: string, accept: boolean): void {
-    this._socket.emit('respondFriendRequest', requestID, accept);
-    // Remove from incoming requests if we responded
-    if (accept) {
-      this._incomingFriendRequests = this._incomingFriendRequests.filter(
-        req => req.requestID !== requestID,
-      );
-    } else {
-      this._incomingFriendRequests = this._incomingFriendRequests.filter(
-        req => req.requestID !== requestID,
-      );
-    }
-  }
-
-  /**
-   * Get the list of friends
-   */
-  public get friends(): Player[] {
-    return this._friends;
-  }
-
-  /**
-   * Get the list of incoming friend requests
-   */
-  public get incomingFriendRequests(): FriendRequestNotification[] {
-    return this._incomingFriendRequests;
-  }
-
-  /**
-   * Update the player's status and notify the server
-   * @param status The new status (Online, Busy, Offline)
-   */
-  public updateStatus(status: UserStatus): void {
-    this._socket.emit('updateStatus', status);
-  }
-
-  /**
    * Connect to the townService. Throws an error if it is unable to connect
    * @returns
    */
@@ -735,19 +611,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         this._players = initialData.currentPlayers.map(eachPlayerModel =>
           PlayerController.fromPlayerModel(eachPlayerModel),
         );
-
-        // Initialize friends and pending requests from server
-        this._friends = initialData.friends || [];
-        this._incomingFriendRequests = initialData.pendingFriendRequests || [];
-        console.log('[TownController] Initialize - Friends:', this._friends);
-        console.log('[TownController] Initialize - Pending Friend Requests:', this._incomingFriendRequests);
-        
-        // Emit events for any existing friend requests so components can pick them up
-        if (this._incomingFriendRequests.length > 0) {
-          this._incomingFriendRequests.forEach(request => {
-            this.emit('friendRequestReceived', request);
-          });
-        }
 
         this._interactableControllers = [];
         initialData.interactables.forEach(eachInteractable => {
@@ -1100,68 +963,6 @@ export function usePlayers(): PlayerController[] {
     };
   }, [townController, setPlayers]);
   return players;
-}
-
-/**
- * A react hook to return the list of friends
- *
- * This hook will cause components that use it to re-render when the friend list changes.
- *
- * This hook relies on the TownControllerContext.
- *
- * @returns an array of Player models representing friends
- */
-export function useFriends(): Player[] {
-  const townController = useTownController();
-  const [friends, setFriends] = useState<Player[]>(townController.friends);
-  useEffect(() => {
-    const updateFriends = () => {
-      setFriends([...townController.friends]);
-    };
-    townController.addListener('friendListUpdated', updateFriends);
-    return () => {
-      townController.removeListener('friendListUpdated', updateFriends);
-    };
-  }, [townController]);
-  return friends;
-}
-
-/**
- * A react hook to return the list of incoming friend requests
- *
- * This hook will cause components that use it to re-render when friend requests change.
- *
- * This hook relies on the TownControllerContext.
- *
- * @returns an array of FriendRequestNotification objects
- */
-export function useFriendRequests(): FriendRequestNotification[] {
-  const townController = useTownController();
-  const [requests, setRequests] = useState<FriendRequestNotification[]>(
-    townController.incomingFriendRequests,
-  );
-  useEffect(() => {
-    // Initial sync
-    setRequests([...townController.incomingFriendRequests]);
-    
-    const updateRequests = (request: FriendRequestNotification) => {
-      // Update from the controller's current state
-      setRequests([...townController.incomingFriendRequests]);
-    };
-    townController.addListener('friendRequestReceived', updateRequests);
-    
-    // Also update when we respond to a request (to remove it from the list)
-    const removeRequest = () => {
-      setRequests([...townController.incomingFriendRequests]);
-    };
-    townController.addListener('friendRequestUpdated', removeRequest);
-    
-    return () => {
-      townController.removeListener('friendRequestReceived', updateRequests);
-      townController.removeListener('friendRequestUpdated', removeRequest);
-    };
-  }, [townController]);
-  return requests;
 }
 
 function samePlayers(a1: PlayerController[], a2: PlayerController[]) {
