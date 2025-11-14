@@ -103,6 +103,10 @@ export type TownEvents = {
    */
   friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
   /**
+   * An event that indicates that a friend's status has been updated
+   */
+  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
+  /**
    * An event that indicates that the 2D game is now paused. Pausing the game should, if nothing else,
    * release all key listeners, so that text entry is possible
    */
@@ -401,6 +405,13 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     });
 
     /**
+     * On user status updated, emit to listeners
+     */
+    this._socket.on('userStatusUpdated', statusUpdate => {
+      this.emit('userStatusUpdated', statusUpdate);
+    });
+
+    /**
      * On changes to town settings, update the local state and emit a townSettingsUpdated event to
      * the controller's event listeners
      */
@@ -605,9 +616,35 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   }
 
   /**
+   * Update user status
+   * @param status The new status
+   */
+  public async updateUserStatus(status: 'Online' | 'Busy' | 'Offline'): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update status');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+  }
+
+  /**
    * Get the current user's friend list
    */
-  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string }>> {
+  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string }>> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'GET',
