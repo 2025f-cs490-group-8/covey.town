@@ -21,37 +21,22 @@ import {
   IconButton,
   Flex,
   Spacer,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
-  useToast,
 } from '@chakra-ui/react';
-import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
 interface Friend {
-  friendId: string;
-  friendUserName: string;
-}
-
-interface FriendRequest {
-  requestId: string;
-  fromUserId: string;
-  fromUserName: string;
-  toUserId: string;
-  toUserName: string;
-  status: string;
-  createdAt: Date;
+  id: string;
+  username: string;
+  status: UserStatus;
 }
 
 export default function Profile(): JSX.Element {
   const townController = useTownController();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const toast = useToast();
 
   const username = townController.userName;
   const townId = townController.townID;
@@ -65,85 +50,14 @@ export default function Profile(): JSX.Element {
   // Status management
   const [userStatus, setUserStatus] = useState<UserStatus>('Online');
   const [searchQuery, setSearchQuery] = useState('');
-  const [friends, setFriends] = useState<Friend[]>([]);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Load friends and friend requests
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [friendsData, requestsData] = await Promise.all([
-          townController.getFriends(),
-          townController.getFriendRequests(),
-        ]);
-        setFriends(friendsData);
-        setFriendRequests(requestsData);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-        toast({
-          title: 'Error',
-          description: err instanceof Error ? err.message : 'Failed to load friends',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-
-    // Listen for new friend requests
-    const handleFriendRequest = (request: { requestId: string; fromUserId: string; fromUserName: string }) => {
-      setFriendRequests(prev => [
-        ...prev,
-        {
-          requestId: request.requestId,
-          fromUserId: request.fromUserId,
-          fromUserName: request.fromUserName,
-          toUserId: townController.userID,
-          toUserName: username,
-          status: 'pending',
-          createdAt: new Date(),
-        },
-      ]);
-      toast({
-        title: 'New Friend Request',
-        description: `${request.fromUserName} sent you a friend request`,
-        status: 'info',
-        duration: 5000,
-        isClosable: true,
-      });
-    };
-
-    // Listen for friend request accepted events
-    const handleFriendAccepted = (friend: { friendId: string; friendUserName: string }) => {
-      // Check if friend is already in the list
-      if (!friends.some(f => f.friendId === friend.friendId)) {
-        setFriends(prev => [...prev, friend]);
-        toast({
-          title: 'Friend Added',
-          description: `${friend.friendUserName} accepted your friend request`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
-    };
-
-    townController.on('friendRequestReceived', handleFriendRequest);
-    townController.on('friendRequestAccepted', handleFriendAccepted);
-
-    return () => {
-      townController.off('friendRequestReceived', handleFriendRequest);
-      townController.off('friendRequestAccepted', handleFriendAccepted);
-    };
-  }, [townController, username, friends]);
+  
+  // Mock friends list (in real app, this would come from backend)
+  const [friends, setFriends] = useState<Friend[]>([
+    { id: '1', username: 'Alice', status: 'Online' },
+    { id: '2', username: 'Bob', status: 'Busy' },
+    { id: '3', username: 'Charlie', status: 'Offline' },
+    { id: '4', username: 'Diana', status: 'Online' },
+  ]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
@@ -155,51 +69,11 @@ export default function Profile(): JSX.Element {
   };
 
   const filteredFriends = friends.filter(friend =>
-    friend.friendUserName.toLowerCase().includes(searchQuery.toLowerCase())
+    friend.username.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAcceptRequest = async (requestId: string) => {
-    try {
-      const result = await townController.acceptFriendRequest(requestId);
-      setFriendRequests(prev => prev.filter(req => req.requestId !== requestId));
-      setFriends(prev => [...prev, { friendId: result.friendId, friendUserName: result.friendUserName }]);
-      toast({
-        title: 'Friend Added',
-        description: `${result.friendUserName} is now your friend`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to accept friend request',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleDeclineRequest = async (requestId: string) => {
-    try {
-      await townController.declineFriendRequest(requestId);
-      setFriendRequests(prev => prev.filter(req => req.requestId !== requestId));
-      toast({
-        title: 'Request Declined',
-        status: 'info',
-        duration: 2000,
-        isClosable: true,
-      });
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to decline friend request',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
+  const removeFriend = (friendId: string) => {
+    setFriends(friends.filter(f => f.id !== friendId));
   };
 
   return (
@@ -283,59 +157,14 @@ export default function Profile(): JSX.Element {
 
         <Divider />
 
-        {/* Friend Requests Section */}
-        {friendRequests.length > 0 && (
-          <>
-            <Box>
-              <Heading size="md" mb={4}>Friend Requests ({friendRequests.length})</Heading>
-              <VStack spacing={2} align="stretch">
-                {friendRequests.map((request) => (
-                  <Box
-                    key={request.requestId}
-                    p={3}
-                    borderWidth="1px"
-                    borderRadius="md"
-                    borderColor={borderColor}
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
-                  >
-                    <Flex align="center">
-                      <Avatar size="sm" name={request.fromUserName} mr={3} />
-                      <Box flex={1}>
-                        <Text fontWeight="medium">{request.fromUserName}</Text>
-                        <Text fontSize="xs" color="gray.500">
-                          wants to be your friend
-                        </Text>
-                      </Box>
-                      <HStack spacing={2}>
-                        <IconButton
-                          icon={<CheckIcon />}
-                          size="sm"
-                          colorScheme="green"
-                          aria-label="Accept"
-                          onClick={() => handleAcceptRequest(request.requestId)}
-                        />
-                        <IconButton
-                          icon={<CloseIcon />}
-                          size="sm"
-                          colorScheme="red"
-                          variant="ghost"
-                          aria-label="Decline"
-                          onClick={() => handleDeclineRequest(request.requestId)}
-                        />
-                      </HStack>
-                    </Flex>
-                  </Box>
-                ))}
-              </VStack>
-            </Box>
-            <Divider />
-          </>
-        )}
-
         {/* Friends List Section */}
         <Box>
           <Flex align="center" mb={4}>
             <Heading size="md">Friends ({friends.length})</Heading>
+            <Spacer />
+            <Button leftIcon={<AddIcon />} colorScheme="blue" size="sm">
+              Add Friend
+            </Button>
           </Flex>
 
           {/* Search Bar */}
@@ -350,58 +179,51 @@ export default function Profile(): JSX.Element {
             />
           </InputGroup>
 
-          {/* Error Message */}
-          {error && (
-            <Alert status="error" mb={4}>
-              <AlertIcon />
-              <AlertTitle>Error!</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
           {/* Friends List */}
-          {loading ? (
-            <Text color="gray.500" textAlign="center" py={4}>
-              Loading...
-            </Text>
-          ) : (
-            <VStack spacing={2} align="stretch" maxH="300px" overflowY="auto">
-              {filteredFriends.length > 0 ? (
-                filteredFriends.map((friend) => (
-                  <Box
-                    key={friend.friendId}
-                    p={3}
-                    borderWidth="1px"
-                    borderRadius="md"
-                    borderColor={borderColor}
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
-                  >
-                    <Flex align="center">
-                      <Avatar size="sm" name={friend.friendUserName} mr={3} />
-                      <Box flex={1}>
-                        <Text fontWeight="medium">{friend.friendUserName}</Text>
-                        <HStack spacing={1}>
-                          <Box
-                            w={2}
-                            h={2}
-                            borderRadius="full"
-                            bg={`${getStatusColor('Online')}.400`}
-                          />
-                          <Text fontSize="xs" color="gray.500">
-                            Online
-                          </Text>
-                        </HStack>
-                      </Box>
-                    </Flex>
-                  </Box>
-                ))
-              ) : (
-                <Text color="gray.500" textAlign="center" py={4}>
-                  {searchQuery ? 'No friends found' : 'No friends yet'}
-                </Text>
-              )}
-            </VStack>
-          )}
+          <VStack spacing={2} align="stretch" maxH="300px" overflowY="auto">
+            {filteredFriends.length > 0 ? (
+              filteredFriends.map((friend) => (
+                <Box
+                  key={friend.id}
+                  p={3}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  borderColor={borderColor}
+                  _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
+                >
+                  <Flex align="center">
+                    <Avatar size="sm" name={friend.username} mr={3} />
+                    <Box flex={1}>
+                      <Text fontWeight="medium">{friend.username}</Text>
+                      <HStack spacing={1}>
+                        <Box
+                          w={2}
+                          h={2}
+                          borderRadius="full"
+                          bg={`${getStatusColor(friend.status)}.400`}
+                        />
+                        <Text fontSize="xs" color="gray.500">
+                          {friend.status}
+                        </Text>
+                      </HStack>
+                    </Box>
+                    <IconButton
+                      icon={<CloseIcon />}
+                      size="xs"
+                      colorScheme="red"
+                      variant="ghost"
+                      aria-label="Remove friend"
+                      onClick={() => removeFriend(friend.id)}
+                    />
+                  </Flex>
+                </Box>
+              ))
+            ) : (
+              <Text color="gray.500" textAlign="center" py={4}>
+                No friends found
+              </Text>
+            )}
+          </VStack>
         </Box>
 
         <Divider />

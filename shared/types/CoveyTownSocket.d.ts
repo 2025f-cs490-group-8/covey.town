@@ -261,8 +261,6 @@ export interface ServerToClientEvents {
   chatMessage: (message: ChatMessage) => void;
   interactableUpdate: (interactable: Interactable) => void;
   commandResponse: (response: InteractableCommandResponse) => void;
-  friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
-  friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
 }
 
 export interface ClientToServerEvents {

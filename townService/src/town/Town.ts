@@ -93,9 +93,6 @@ export default class Town {
 
   private _connectedSockets: Set<CoveyTownSocket> = new Set();
 
-  // Map from player ID to their socket for direct messaging
-  private _playerSockets: Map<string, CoveyTownSocket> = new Map();
-
   private _chatMessages: ChatMessage[] = [];
 
   constructor(
@@ -123,7 +120,6 @@ export default class Town {
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
-    this._playerSockets.set(newPlayer.id, socket);
 
     // Create a video token for this user to join this town
     newPlayer.videoToken = await this._videoClient.getTokenForTown(this._townID, newPlayer.id);
@@ -137,7 +133,6 @@ export default class Town {
     socket.on('disconnect', () => {
       this._removePlayer(newPlayer);
       this._connectedSockets.delete(socket);
-      this._playerSockets.delete(newPlayer.id);
     });
 
     // Set up a listener to forward all chat messages to all clients in the town
@@ -377,36 +372,6 @@ export default class Town {
    */
   public getChatMessages(interactableID: string | undefined) {
     return this._chatMessages.filter(eachMessage => eachMessage.interactableID === interactableID);
-  }
-
-  /**
-   * Emit a friend request event to a specific player
-   * @param playerId The ID of the player to notify
-   * @param request The friend request data
-   */
-  public emitFriendRequestToPlayer(
-    playerId: string,
-    request: { requestId: string; fromUserId: string; fromUserName: string },
-  ): void {
-    const socket = this._playerSockets.get(playerId);
-    if (socket) {
-      socket.emit('friendRequestReceived', request);
-    }
-  }
-
-  /**
-   * Emit a friend request accepted event to a specific player
-   * @param playerId The ID of the player to notify
-   * @param friend The friend data
-   */
-  public emitFriendRequestAccepted(
-    playerId: string,
-    friend: { friendId: string; friendUserName: string },
-  ): void {
-    const socket = this._playerSockets.get(playerId);
-    if (socket) {
-      socket.emit('friendRequestAccepted', friend);
-    }
   }
 
   /**

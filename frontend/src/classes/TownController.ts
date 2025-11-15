@@ -95,14 +95,6 @@ export type TownEvents = {
    */
   chatMessage: (message: ChatMessage) => void;
   /**
-   * An event that indicates that a friend request has been received
-   */
-  friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
-  /**
-   * An event that indicates that a friend request has been accepted
-   */
-  friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
-  /**
    * An event that indicates that the 2D game is now paused. Pausing the game should, if nothing else,
    * release all key listeners, so that text entry is possible
    */
@@ -387,20 +379,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     });
 
     /**
-     * On friend request received, emit to listeners
-     */
-    this._socket.on('friendRequestReceived', request => {
-      this.emit('friendRequestReceived', request);
-    });
-
-    /**
-     * On friend request accepted, emit to listeners
-     */
-    this._socket.on('friendRequestAccepted', friend => {
-      this.emit('friendRequestAccepted', friend);
-    });
-
-    /**
      * On changes to town settings, update the local state and emit a townSettingsUpdated event to
      * the controller's event listeners
      */
@@ -510,172 +488,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   public emitChatMessage(message: ChatMessage) {
     this._socket.emit('chatMessage', message);
-  }
-
-  /**
-   * Send a friend request to another user
-   * @param toUserId The ID of the user to send the request to
-   */
-  public async sendFriendRequest(toUserId: string): Promise<{ requestId: string }> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
-    const response = await fetch(`${url}/towns/${this.townID}/friendRequest`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-Token': this.sessionToken,
-      },
-      body: JSON.stringify({ toUserId }),
-    });
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to send friend request');
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-    }
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return response.json();
-    } else {
-      const text = await response.text();
-      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
-    }
-  }
-
-  /**
-   * Accept a friend request
-   * @param requestId The ID of the friend request to accept
-   */
-  public async acceptFriendRequest(requestId: string): Promise<{ friendId: string; friendUserName: string }> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
-    const response = await fetch(`${url}/towns/${this.townID}/friendRequest/accept`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-Token': this.sessionToken,
-      },
-      body: JSON.stringify({ requestId }),
-    });
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to accept friend request');
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-    }
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return response.json();
-    } else {
-      const text = await response.text();
-      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
-    }
-  }
-
-  /**
-   * Decline a friend request
-   * @param requestId The ID of the friend request to decline
-   */
-  public async declineFriendRequest(requestId: string): Promise<void> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
-    const response = await fetch(`${url}/towns/${this.townID}/friendRequest/decline`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Session-Token': this.sessionToken,
-      },
-      body: JSON.stringify({ requestId }),
-    });
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to decline friend request');
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-    }
-  }
-
-  /**
-   * Get the current user's friend list
-   */
-  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string }>> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
-    const response = await fetch(`${url}/towns/${this.townID}/friends`, {
-      method: 'GET',
-      headers: {
-        'X-Session-Token': this.sessionToken,
-      },
-    });
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get friends');
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-    }
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return response.json();
-    } else {
-      const text = await response.text();
-      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
-    }
-  }
-
-  /**
-   * Get pending friend requests for the current user
-   */
-  public async getFriendRequests(): Promise<
-    Array<{
-      requestId: string;
-      fromUserId: string;
-      fromUserName: string;
-      toUserId: string;
-      toUserName: string;
-      status: string;
-      createdAt: Date;
-    }>
-  > {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
-    const response = await fetch(`${url}/towns/${this.townID}/friendRequests`, {
-      method: 'GET',
-      headers: {
-        'X-Session-Token': this.sessionToken,
-      },
-    });
-    if (!response.ok) {
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to get friend requests');
-      } else {
-        const text = await response.text();
-        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
-      }
-    }
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      const data = await response.json();
-      return data.map((req: any) => ({
-        ...req,
-        createdAt: new Date(req.createdAt),
-      }));
-    } else {
-      const text = await response.text();
-      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
-    }
   }
 
   /**
