@@ -2,7 +2,6 @@ import { ITiledMap, ITiledMapObjectLayer } from '@jonbell/tiled-map-type-guard';
 import { nanoid } from 'nanoid';
 import { BroadcastOperator } from 'socket.io';
 import InvalidParametersError from '../lib/InvalidParametersError';
-import FriendsStore from '../lib/FriendsStore';
 import IVideoClient from '../lib/IVideoClient';
 import Player from '../lib/Player';
 import TwilioVideo from '../lib/TwilioVideo';
@@ -232,24 +231,6 @@ export default class Town {
     if (player.location.interactableID) {
       this._removePlayerFromInteractable(player);
     }
-    
-    // Set status to Offline when player disconnects and notify friends
-    const friendsStore = FriendsStore.getInstance();
-    friendsStore.setUserStatus(player.id, 'Offline');
-    
-    // Notify friends of status change
-    const friends = friendsStore.getFriends(player.id);
-    friends.forEach(friend => {
-      const friendPlayer = this._players.find(p => p.id === friend.friendId);
-      if (friendPlayer) {
-        this.emitUserStatusUpdate(friendPlayer.id, {
-          userId: player.id,
-          userName: player.userName,
-          status: 'Offline',
-        });
-      }
-    });
-    
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
   }
@@ -425,21 +406,6 @@ export default class Town {
     const socket = this._playerSockets.get(playerId);
     if (socket) {
       socket.emit('friendRequestAccepted', friend);
-    }
-  }
-
-  /**
-   * Emit a user status update event to a specific player
-   * @param playerId The ID of the player to notify
-   * @param statusUpdate The status update data
-   */
-  public emitUserStatusUpdate(
-    playerId: string,
-    statusUpdate: { userId: string; userName: string; status: string },
-  ): void {
-    const socket = this._playerSockets.get(playerId);
-    if (socket) {
-      socket.emit('userStatusUpdated', statusUpdate);
     }
   }
 

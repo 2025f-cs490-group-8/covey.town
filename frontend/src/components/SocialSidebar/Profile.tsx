@@ -35,7 +35,6 @@ type UserStatus = 'Online' | 'Busy' | 'Offline';
 interface Friend {
   friendId: string;
   friendUserName: string;
-  friendStatus?: UserStatus;
 }
 
 interface FriendRequest {
@@ -65,9 +64,6 @@ export default function Profile(): JSX.Element {
   
   // Status management
   const [userStatus, setUserStatus] = useState<UserStatus>('Online');
-  
-  // Note: Initial status is set to Online when user joins the town (in backend)
-  // No need to set it again here
   const [searchQuery, setSearchQuery] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
@@ -140,23 +136,12 @@ export default function Profile(): JSX.Element {
       }
     };
 
-    // Listen for user status updates from friends
-    const handleStatusUpdate = (statusUpdate: { userId: string; userName: string; status: string }) => {
-      setFriends(prev => prev.map(friend =>
-        friend.friendId === statusUpdate.userId
-          ? { ...friend, friendStatus: statusUpdate.status as UserStatus }
-          : friend
-      ));
-    };
-
     townController.on('friendRequestReceived', handleFriendRequest);
     townController.on('friendRequestAccepted', handleFriendAccepted);
-    townController.on('userStatusUpdated', handleStatusUpdate);
 
     return () => {
       townController.off('friendRequestReceived', handleFriendRequest);
       townController.off('friendRequestAccepted', handleFriendAccepted);
-      townController.off('userStatusUpdated', handleStatusUpdate);
     };
   }, [townController, username, friends]);
 
@@ -254,64 +239,13 @@ export default function Profile(): JSX.Element {
                 {userStatus}
               </MenuButton>
               <MenuList>
-                <MenuItem onClick={async () => {
-                  const newStatus = 'Online';
-                  const previousStatus = userStatus;
-                  setUserStatus(newStatus);
-                  try {
-                    await townController.updateUserStatus(newStatus);
-                  } catch (err) {
-                    // Revert on error
-                    setUserStatus(previousStatus);
-                    toast({
-                      title: 'Error',
-                      description: err instanceof Error ? err.message : 'Failed to update status',
-                      status: 'error',
-                      duration: 3000,
-                      isClosable: true,
-                    });
-                  }
-                }}>
+                <MenuItem onClick={() => setUserStatus('Online')}>
                   <Badge colorScheme="green" mr={2}>●</Badge> Online
                 </MenuItem>
-                <MenuItem onClick={async () => {
-                  const newStatus = 'Busy';
-                  const previousStatus = userStatus;
-                  setUserStatus(newStatus);
-                  try {
-                    await townController.updateUserStatus(newStatus);
-                  } catch (err) {
-                    // Revert on error
-                    setUserStatus(previousStatus);
-                    toast({
-                      title: 'Error',
-                      description: err instanceof Error ? err.message : 'Failed to update status',
-                      status: 'error',
-                      duration: 3000,
-                      isClosable: true,
-                    });
-                  }
-                }}>
+                <MenuItem onClick={() => setUserStatus('Busy')}>
                   <Badge colorScheme="red" mr={2}>●</Badge> Busy
                 </MenuItem>
-                <MenuItem onClick={async () => {
-                  const newStatus = 'Offline';
-                  const previousStatus = userStatus;
-                  setUserStatus(newStatus);
-                  try {
-                    await townController.updateUserStatus(newStatus);
-                  } catch (err) {
-                    // Revert on error
-                    setUserStatus(previousStatus);
-                    toast({
-                      title: 'Error',
-                      description: err instanceof Error ? err.message : 'Failed to update status',
-                      status: 'error',
-                      duration: 3000,
-                      isClosable: true,
-                    });
-                  }
-                }}>
+                <MenuItem onClick={() => setUserStatus('Offline')}>
                   <Badge colorScheme="gray" mr={2}>●</Badge> Offline
                 </MenuItem>
               </MenuList>
@@ -447,15 +381,15 @@ export default function Profile(): JSX.Element {
                       <Box flex={1}>
                         <Text fontWeight="medium">{friend.friendUserName}</Text>
                         <HStack spacing={1}>
-                        <Box
-                          w={2}
-                          h={2}
-                          borderRadius="full"
-                          bg={`${getStatusColor(friend.friendStatus || 'Offline')}.400`}
-                        />
-                        <Text fontSize="xs" color="gray.500">
-                          {friend.friendStatus || 'Offline'}
-                        </Text>
+                          <Box
+                            w={2}
+                            h={2}
+                            borderRadius="full"
+                            bg={`${getStatusColor('Online')}.400`}
+                          />
+                          <Text fontSize="xs" color="gray.500">
+                            Online
+                          </Text>
                         </HStack>
                       </Box>
                     </Flex>

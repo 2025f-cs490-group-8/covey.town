@@ -263,7 +263,6 @@ export interface ServerToClientEvents {
   commandResponse: (response: InteractableCommandResponse) => void;
   friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
   friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
-  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
 }
 
 export interface ClientToServerEvents {
