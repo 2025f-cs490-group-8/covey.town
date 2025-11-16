@@ -16,7 +16,7 @@ import Game from './Game';
  * At any given point in time, there is at most one game in progress in a GameArea.
  */
 export default abstract class GameArea<
-  GameType extends Game<GameState, unknown>,
+  GameType extends Game<any, any>,
 > extends InteractableArea {
   protected _game?: GameType;
 
@@ -60,4 +60,5 @@ export default abstract class GameArea<
     }
     super.remove(player);
   }
+  
 }

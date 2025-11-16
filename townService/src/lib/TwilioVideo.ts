@@ -60,10 +60,10 @@ export default class TwilioVideo implements IVideoClient {
       this._twilioApiKeySID,
       this._twilioApiKeySecret,
       {
+        identity: clientIdentity,
         ttl: MAX_ALLOWED_SESSION_DURATION,
       },
     );
-    token.identity = clientIdentity;
     const videoGrant = new Twilio.jwt.AccessToken.VideoGrant({ room: coveyTownID });
     token.addGrant(videoGrant);
     return token.toJwt();

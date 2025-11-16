@@ -38,6 +38,7 @@
         "npm": "9.x.x"
     },
     "dependencies": {
+        "@chakra-ui/icons": "^2.2.4",
         "@types/ramda": "^0.27.34",
         "mssql": "^12.1.0",
         "ramda": "^0.27.1",
