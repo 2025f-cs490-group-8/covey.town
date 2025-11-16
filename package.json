@@ -44,11 +44,12 @@
         "typescript-is": "^0.17.0"
     },
     "files": [
-        "frontend/src/classes/interactable/ConnectFourAreaController.ts",
-        "frontend/src/classes/interactable/InteractableAreaController.ts",
-        "frontend/src/components/Town/interactables/ConnectFour/ConnectFourArea.tsx",
-        "frontend/src/components/Town/interactables/ConnectFour/ConnectFourBoard.tsx",
-        "frontend/src/components/Town/interactables/GamesArea.tsx",
-        "frontend/src/components/SocialSidebar/InteractableAreasList.tsx"
+        "frontend/src/classes/interactable/QuantumTicTacToeAreaController.ts",
+        "frontend/src/components/Town/interactables/TicTacToe/QuantumTicTacToeArea.tsx",
+        "frontend/src/components/Town/interactables/TicTacToe/QuantumTicTacToeBoard.tsx",
+        "townService/src/town/games/QuantumTicTacToeGame.test.ts",
+        "townService/src/town/games/QuantumTicTacToeGame.ts",
+        "townService/src/town/games/QuantumTicTacToeGameArea.ts",
+        "townService/src/town/games/TicTacToeGame.ts"
     ]
 }
