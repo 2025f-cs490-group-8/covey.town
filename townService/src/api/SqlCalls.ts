@@ -7,12 +7,16 @@ async function constructBCRYPTHash(password: string) {
   return hash;
 }
 
+/**
+ * Here I'm asserting that the port number will exist, this should be true but TS doesn't trust it.
+ * It should only fail if .env isn't properly configured
+ */
 export const connection = createPool({
-  host: process.env.DB_HOST || 'covey-town.c1e4guig85zc.us-east-2.rds.amazonaws.com',
-  port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'epicgamer12',
-  database: process.env.DB_NAME || 'COVEYTOWN',
+  host: process.env.DB_HOST,
+  port: parseInt(process.env.DB_PORT!, 10),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
 process.on('SIGTERM', () => {
@@ -21,7 +25,7 @@ process.on('SIGTERM', () => {
 });
 
 /**
- * in case we want to split up this class into different files
+ * In case we want to split up this class into different files.
  */
 export default connection;
 
