@@ -70,7 +70,7 @@ export class QuerySQL {
   }
 
   /**
-   * id is taken care of through mysql and status has an offline default value.
+   * ID is taken care of through mysql and status has an offline default value.
    */
   async constructNewUser(userName: string, email: string, userPassword: string) {
     try {
@@ -84,7 +84,7 @@ export class QuerySQL {
   }
 
   /**
-   * default pending status
+   * Default pending status.
    */
   async constructNewFriendRequest(sender: number, receiver: number) {
     try {
@@ -97,7 +97,7 @@ export class QuerySQL {
   }
 
   /**
-   * There is probably a better solution to this that involves restructuring the database, as is returns id of friends
+   * There is probably a better solution to this that involves restructuring the database, as is returns id of friends.
    */
   async getFriendsList(uid: number) {
     try {
@@ -142,8 +142,8 @@ export class QuerySQL {
   }
 
   /**
-   * this will directly delete the request from our database, can be used to unadd someone, if a user wishes to block a friend, call
-   * blockUser() instead. also implicitly deletes friend relation so it can be used to remove friends.
+   * This will directly delete the request from our database, can be used to unadd someone, if a user wishes to block a friend, call
+   * blockUser() instead. Also implicitly deletes friend relation so it can be used to remove friends.
    */
   async declineFriendRequest(sender: number, receiver: number) {
     const request = await this.getFriendRequest(sender, receiver);
@@ -158,7 +158,7 @@ export class QuerySQL {
   }
 
   /**
-   * if a user chooses to block someone during a friendrequest prompt only call declineFriendRequest() first then this or if they
+   * If a user chooses to block someone during a friendrequest prompt only call declineFriendRequest() first then this or if they
    * wish to block them in general call declineFriendRequest first.
    */
   async blockUser(blocker: number, blocked: number) {
@@ -183,7 +183,7 @@ export class QuerySQL {
   }
 
   /**
-   * deletes blocked relationship from table
+   * Deletes blocked relationship from table.
    */
   async unblockUser(blocker: number, blocked: number) {
     try {
