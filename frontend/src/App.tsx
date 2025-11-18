@@ -4,6 +4,7 @@ import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
 import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import TownController from './classes/TownController';
 import { ChatProvider } from './components/VideoCall/VideoFrontend/components/ChatProvider';
 import ErrorDialog from './components/VideoCall/VideoFrontend/components/ErrorDialog/ErrorDialog';
@@ -21,8 +22,9 @@ import { TownsServiceClient } from './generated/client';
 import { nanoid } from 'nanoid';
 import { Routes, Route } from 'react-router-dom';
 import Profile from './components/SocialSidebar/Profile';
-import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text } from '@chakra-ui/react';
+import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text, HStack, Divider } from '@chakra-ui/react';
 import ToggleChatButton from './components/VideoCall/VideoFrontend/components/Buttons/ToggleChatButton/ToggleChatButton';
+import GoogleLoginButton from './components/Login/GoogleLoginButton';
 
 function App() {
   const [townController, setTownController] = useState<TownController | null>(null);
@@ -152,6 +154,27 @@ function App() {
       <Button type="submit" colorScheme="blue" width="100%">
         Login
       </Button>
+
+      {/* Always show Google login section - button will handle its own visibility */}
+      <HStack width="100%" spacing={2}>
+        <Divider />
+        <Text fontSize="sm" color="gray.500">OR</Text>
+        <Divider />
+      </HStack>
+
+      <GoogleLoginButton
+        onSuccess={(userInfo) => {
+          setIsAuthenticated(true);
+          // Store user info for later use (e.g., for town joining)
+          localStorage.setItem('googleUser', JSON.stringify(userInfo));
+          toast({
+            title: 'Success',
+            description: `Welcome, ${userInfo.name}!`,
+            status: 'success',
+            duration: 2000,
+          });
+        }}
+      />
 
       <Text fontSize="sm" color="gray.600">
         Don't have an account?{' '}
@@ -345,13 +368,23 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  
+  const appContent = (
+    <AppStateProvider>
+      <AppOrDebugApp />
+    </AppStateProvider>
+  );
+  
+  // Always wrap with GoogleOAuthProvider to prevent hook errors
+  // Use a dummy client ID if not configured - GoogleLoginButton will handle showing disabled state
   return (
     <BrowserRouter>
       <ChakraProvider>
         <MuiThemeProvider theme={theme}>
-          <AppStateProvider>
-            <AppOrDebugApp />
-          </AppStateProvider>
+          <GoogleOAuthProvider clientId={googleClientId || 'dummy-client-id-for-hook'}>
+            {appContent}
+          </GoogleOAuthProvider>
         </MuiThemeProvider>
       </ChakraProvider>
     </BrowserRouter>
