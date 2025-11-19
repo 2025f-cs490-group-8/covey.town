@@ -45,6 +45,9 @@ export class QuerySQL {
     try {
       const query = 'SELECT hash FROM Users WHERE id = ?';
       const [row] = await connection.execute<any[]>(query, [uid]);
+      if (!row || row.length === 0) {
+        return null;
+      }
       return row[0];
     } catch (error) {
       console.error('Error fetching hash:', error);
@@ -54,6 +57,9 @@ export class QuerySQL {
 
   async passwordChallenge(userPassword: string, uid: number) {
     const hashRequest = await this.getUserHash(uid);
+     if (!hashRequest) {
+    return false;
+    }
     const storedHash = hashRequest.hash;
     const match = await bcrypt.compare(userPassword, storedHash);
     return match;
