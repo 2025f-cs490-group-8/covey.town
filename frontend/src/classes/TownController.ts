@@ -101,7 +101,11 @@ export type TownEvents = {
   /**
    * An event that indicates that a friend request has been accepted
    */
-  friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
+  friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
+  /**
+   * An event that indicates that a friend has been removed
+   */
+  friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
   /**
    * An event that indicates that a friend's status has been updated
    */
@@ -402,6 +406,13 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
      */
     this._socket.on('friendRequestAccepted', friend => {
       this.emit('friendRequestAccepted', friend);
+    });
+
+    /**
+     * On friend removed, emit to listeners
+     */
+    this._socket.on('friendRemoved', removedFriend => {
+      this.emit('friendRemoved', removedFriend);
     });
 
     /**
@@ -712,6 +723,32 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     } else {
       const text = await response.text();
       throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
+   * Remove a friend from the current user's friend list
+   * @param friendId The ID of the friend to remove
+   */
+  public async removeFriend(friendId: string): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friends`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ friendId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to remove friend');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
     }
   }
 

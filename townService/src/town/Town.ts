@@ -420,11 +420,26 @@ export default class Town {
    */
   public emitFriendRequestAccepted(
     playerId: string,
-    friend: { friendId: string; friendUserName: string },
+    friend: { friendId: string; friendUserName: string; friendStatus?: string },
   ): void {
     const socket = this._playerSockets.get(playerId);
     if (socket) {
       socket.emit('friendRequestAccepted', friend);
+    }
+  }
+
+  /**
+   * Emit a friend removed event to a specific player
+   * @param playerId The ID of the player to notify
+   * @param removedFriend The removed friend data
+   */
+  public emitFriendRemoved(
+    playerId: string,
+    removedFriend: { friendId: string; friendUserName: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('friendRemoved', removedFriend);
     }
   }
 
