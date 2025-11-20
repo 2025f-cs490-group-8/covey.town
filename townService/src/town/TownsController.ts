@@ -36,6 +36,7 @@ import {
 // eslint-disable-next-line import/prefer-default-export
 export class TownsController extends Controller {
   private _townsStore: CoveyTownsStore = CoveyTownsStore.getInstance();
+
   private _friendsStore: FriendsStore = FriendsStore.getInstance();
 
   /**
@@ -272,13 +273,13 @@ export class TownsController extends Controller {
       // Get the request before accepting to find the sender
       const allRequests = this._friendsStore.getFriendRequests(player.id);
       const request = allRequests.find(req => req.id === requestBody.requestId);
-      
+
       if (!request) {
         throw new InvalidParametersError('Friend request not found');
       }
-      
+
       const friend = this._friendsStore.acceptFriendRequest(requestBody.requestId, player.id);
-      
+
       // Notify the sender (fromUserId) that their request was accepted
       const senderPlayer = town.players.find(p => p.id === request.fromUserId);
       if (senderPlayer) {
@@ -287,13 +288,13 @@ export class TownsController extends Controller {
           friendUserName: player.userName,
         });
       }
-      
+
       // Notify the accepter via socket as well (for consistency and real-time updates)
       town.emitFriendRequestAccepted(player.id, {
         friendId: request.fromUserId,
         friendUserName: request.fromUserName,
       });
-      
+
       return { friendId: friend.friendId, friendUserName: friend.friendUserName };
     } catch (error) {
       throw new InvalidParametersError(
@@ -472,11 +473,11 @@ export class TownsController extends Controller {
     const newPlayer = await town.addPlayer(userName, socket);
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
-console.log('Identity:', newPlayer.userName);
-    
+    console.log('Identity:', newPlayer.userName);
+
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(newPlayer.id, 'Online');
-    
+
     socket.emit('initialize', {
       userID: newPlayer.id,
       sessionToken: newPlayer.sessionToken,

@@ -232,11 +232,11 @@ export default class Town {
     if (player.location.interactableID) {
       this._removePlayerFromInteractable(player);
     }
-    
+
     // Set status to Offline when player disconnects and notify friends
     const friendsStore = FriendsStore.getInstance();
     friendsStore.setUserStatus(player.id, 'Offline');
-    
+
     // Notify friends of status change
     const friends = friendsStore.getFriends(player.id);
     friends.forEach(friend => {
@@ -249,7 +249,7 @@ export default class Town {
         });
       }
     });
-    
+
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
   }
