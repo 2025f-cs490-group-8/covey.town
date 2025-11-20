@@ -26,9 +26,18 @@ import {
   AlertTitle,
   AlertDescription,
   useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react';
 import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
+import { usePlayers } from '../../classes/TownController';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
@@ -53,6 +62,8 @@ export default function Profile(): JSX.Element {
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const players = usePlayers();
 
   const username = townController.userName;
   const townId = townController.townID;
@@ -73,6 +84,8 @@ export default function Profile(): JSX.Element {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addFriendSearchQuery, setAddFriendSearchQuery] = useState('');
+  const [sendingRequestTo, setSendingRequestTo] = useState<string | null>(null);
   const justAcceptedFriendIdRef = useRef<string | null>(null);
 
   // Load friends and friend requests
@@ -284,6 +297,68 @@ export default function Profile(): JSX.Element {
     }
   };
 
+  // Get available users to add as friends (exclude current user and existing friends)
+  const availableUsers = players.filter(player => {
+    // Exclude current user
+    if (player.id === townController.userID) {
+      return false;
+    }
+    // Exclude existing friends
+    if (friends.some(friend => friend.friendId === player.id)) {
+      return false;
+    }
+    // Exclude users who have pending friend requests (sent to us or we sent to them)
+    if (friendRequests.some(request => 
+      request.fromUserId === player.id || request.toUserId === player.id
+    )) {
+      return false;
+    }
+    return true;
+  });
+
+  // Filter available users by search query
+  const filteredAvailableUsers = availableUsers.filter(player =>
+    player.userName.toLowerCase().includes(addFriendSearchQuery.toLowerCase())
+  );
+
+  const handleSendFriendRequestFromModal = async (toUserId: string, toUserName: string) => {
+    if (toUserId === townController.userID) {
+      toast({
+        title: 'Cannot send request',
+        description: 'You cannot send a friend request to yourself',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setSendingRequestTo(toUserId);
+      await townController.sendFriendRequest(toUserId);
+      toast({
+        title: 'Friend Request Sent',
+        description: `Friend request sent to ${toUserName}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      // Close modal after successful request
+      onClose();
+      setAddFriendSearchQuery('');
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to send friend request',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setSendingRequestTo(null);
+    }
+  };
+
   return (
   <Box
   maxW="5000px"
@@ -469,6 +544,15 @@ export default function Profile(): JSX.Element {
         <Box>
           <Flex align="center" mb={4}>
             <Heading size="md">Friends ({friends.length})</Heading>
+            <Spacer />
+            <Button
+              leftIcon={<AddIcon />}
+              colorScheme="blue"
+              size="sm"
+              onClick={onOpen}
+            >
+              Add Friend
+            </Button>
           </Flex>
 
           {/* Search Bar */}
@@ -557,6 +641,72 @@ export default function Profile(): JSX.Element {
           </Button>
         </HStack>
       </VStack>
+
+      {/* Add Friend Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Add Friend</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <SearchIcon color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  placeholder="Search users..."
+                  value={addFriendSearchQuery}
+                  onChange={(e) => setAddFriendSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+
+              {filteredAvailableUsers.length > 0 ? (
+                <VStack spacing={2} align="stretch" maxH="400px" overflowY="auto">
+                  {filteredAvailableUsers.map((player) => (
+                    <Box
+                      key={player.id}
+                      p={3}
+                      borderWidth="1px"
+                      borderRadius="md"
+                      borderColor={borderColor}
+                      _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
+                    >
+                      <Flex align="center">
+                        <Avatar size="sm" name={player.userName} mr={3} />
+                        <Box flex={1}>
+                          <Text fontWeight="medium">{player.userName}</Text>
+                        </Box>
+                        <IconButton
+                          icon={<AddIcon />}
+                          size="sm"
+                          colorScheme="blue"
+                          aria-label={`Send friend request to ${player.userName}`}
+                          onClick={() => handleSendFriendRequestFromModal(player.id, player.userName)}
+                          isLoading={sendingRequestTo === player.id}
+                        />
+                      </Flex>
+                    </Box>
+                  ))}
+                </VStack>
+              ) : (
+                <Text color="gray.500" textAlign="center" py={4}>
+                  {addFriendSearchQuery 
+                    ? 'No users found' 
+                    : availableUsers.length === 0
+                    ? 'No available users to add'
+                    : 'No users match your search'}
+                </Text>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
