@@ -11,27 +11,33 @@ import { QuerySQL, connection } from '../api/SqlCalls';
  */
 @Route('auth')
 @Tags('auth')
+
 export class AuthController extends Controller {
+  
   private _userStore: UserStore = UserStore.getInstance();
 
   private _db = new QuerySQL();
 
   private _googleClient: OAuth2Client | null = null;
 
-  constructor() {
-    super();
+ constructor() {
+  super();
 
-    const googleClientId = process.env.GOOGLE_CLIENT_ID;
-    const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  // Google only accepts HTTP on localhost — NOT HTTPS
+  const redirectUri = 'http://localhost:3000';
 
-    if (googleClientId) {
-      this._googleClient = new OAuth2Client(
-        googleClientId,
-        googleClientSecret,
-        process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000',
-      );
-    }
+  if (googleClientId && googleClientSecret) {
+    this._googleClient = new OAuth2Client(
+      googleClientId,
+      googleClientSecret,
+      redirectUri, // FIXED
+    );
+  } else {
+    console.error('Google OAuth NOT configured. Missing Client ID or Secret.');
   }
+}
 
   /**
    * -------------------------
@@ -157,7 +163,7 @@ export class AuthController extends Controller {
 
       const ticket = await this._googleClient.verifyIdToken({
         idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
+        audience: '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com',
       });
 
       const payload = ticket.getPayload();
