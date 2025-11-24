@@ -262,7 +262,8 @@ export interface ServerToClientEvents {
   interactableUpdate: (interactable: Interactable) => void;
   commandResponse: (response: InteractableCommandResponse) => void;
   friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
-  friendRequestAccepted: (friend: { friendId: string; friendUserName: string }) => void;
+  friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
+  friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
   userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
 }
 

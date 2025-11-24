@@ -279,12 +279,18 @@ export class TownsController extends Controller {
       
       const friend = this._friendsStore.acceptFriendRequest(requestBody.requestId, player.id);
       
+      // Get the status of the new friend for the sender
+      const senderFriendStatus = this._friendsStore.getUserStatus(player.id);
+      // Get the status of the new friend for the accepter
+      const accepterFriendStatus = this._friendsStore.getUserStatus(request.fromUserId);
+      
       // Notify the sender (fromUserId) that their request was accepted
       const senderPlayer = town.players.find(p => p.id === request.fromUserId);
       if (senderPlayer) {
         town.emitFriendRequestAccepted(senderPlayer.id, {
           friendId: player.id,
           friendUserName: player.userName,
+          friendStatus: senderFriendStatus,
         });
       }
       
@@ -292,6 +298,7 @@ export class TownsController extends Controller {
       town.emitFriendRequestAccepted(player.id, {
         friendId: request.fromUserId,
         friendUserName: request.fromUserName,
+        friendStatus: accepterFriendStatus,
       });
       
       return { friendId: friend.friendId, friendUserName: friend.friendUserName };
@@ -447,6 +454,53 @@ export class TownsController extends Controller {
       status: r.status,
       createdAt: r.createdAt,
     }));
+  }
+
+  /**
+   * Remove a friend from the current user's friend list
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The friend ID to remove
+   */
+  @Delete('{townID}/friends')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async removeFriend(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { friendId: string },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Check if they are friends
+    if (!this._friendsStore.areFriends(player.id, requestBody.friendId)) {
+      throw new InvalidParametersError('Users are not friends');
+    }
+
+    // Get friend info before removing
+    const friends = this._friendsStore.getFriends(player.id);
+    const friend = friends.find(f => f.friendId === requestBody.friendId);
+    if (!friend) {
+      throw new InvalidParametersError('Friend not found');
+    }
+
+    // Remove friend from both sides
+    this._friendsStore.removeFriend(player.id, requestBody.friendId);
+
+    // Notify the removed friend via socket if they're in the same town
+    const friendPlayer = town.players.find(p => p.id === requestBody.friendId);
+    if (friendPlayer) {
+      town.emitFriendRemoved(friendPlayer.id, {
+        friendId: player.id,
+        friendUserName: player.userName,
+      });
+    }
   }
 
   /**

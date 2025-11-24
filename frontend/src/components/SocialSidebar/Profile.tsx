@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
   VStack,
@@ -26,9 +26,18 @@ import {
   AlertTitle,
   AlertDescription,
   useToast,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalFooter,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react';
-import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
+import { usePlayers } from '../../classes/TownController';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
@@ -53,6 +62,8 @@ export default function Profile(): JSX.Element {
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
+  const players = usePlayers();
 
   const username = townController.userName;
   const townId = townController.townID;
@@ -73,6 +84,9 @@ export default function Profile(): JSX.Element {
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [addFriendSearchQuery, setAddFriendSearchQuery] = useState('');
+  const [sendingRequestTo, setSendingRequestTo] = useState<string | null>(null);
+  const justAcceptedFriendIdRef = useRef<string | null>(null);
 
   // Load friends and friend requests
   useEffect(() => {
@@ -126,18 +140,29 @@ export default function Profile(): JSX.Element {
     };
 
     // Listen for friend request accepted events
-    const handleFriendAccepted = (friend: { friendId: string; friendUserName: string }) => {
-      // Check if friend is already in the list
-      if (!friends.some(f => f.friendId === friend.friendId)) {
-        setFriends(prev => [...prev, friend]);
-        toast({
-          title: 'Friend Added',
-          description: `${friend.friendUserName} accepted your friend request`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      }
+    const handleFriendAccepted = (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => {
+      setFriends(prev => {
+        // Check if friend is already in the list
+        if (!prev.some(f => f.friendId === friend.friendId)) {
+          // Only show toast if we didn't just accept this friend ourselves
+          // (to avoid duplicate toasts)
+          if (justAcceptedFriendIdRef.current !== friend.friendId) {
+            toast({
+              title: 'Friend Added',
+              description: `${friend.friendUserName} accepted your friend request`,
+              status: 'success',
+              duration: 3000,
+              isClosable: true,
+            });
+          }
+          return [...prev, { 
+            friendId: friend.friendId, 
+            friendUserName: friend.friendUserName,
+            friendStatus: (friend.friendStatus as UserStatus) || 'Online'
+          }];
+        }
+        return prev;
+      });
     };
 
     // Listen for user status updates from friends
@@ -149,16 +174,30 @@ export default function Profile(): JSX.Element {
       ));
     };
 
+    // Listen for friend removed events
+    const handleFriendRemoved = (removedFriend: { friendId: string; friendUserName: string }) => {
+      setFriends(prev => prev.filter(friend => friend.friendId !== removedFriend.friendId));
+      toast({
+        title: 'Friend Removed',
+        description: `${removedFriend.friendUserName} has been removed from your friends list`,
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+    };
+
     townController.on('friendRequestReceived', handleFriendRequest);
     townController.on('friendRequestAccepted', handleFriendAccepted);
+    townController.on('friendRemoved', handleFriendRemoved);
     townController.on('userStatusUpdated', handleStatusUpdate);
 
     return () => {
       townController.off('friendRequestReceived', handleFriendRequest);
       townController.off('friendRequestAccepted', handleFriendAccepted);
+      townController.off('friendRemoved', handleFriendRemoved);
       townController.off('userStatusUpdated', handleStatusUpdate);
     };
-  }, [townController, username, friends]);
+  }, [townController, username]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
@@ -175,16 +214,35 @@ export default function Profile(): JSX.Element {
 
   const handleAcceptRequest = async (requestId: string) => {
     try {
-      const result = await townController.acceptFriendRequest(requestId);
+      // Get the request info before accepting to show the correct toast
+      const request = friendRequests.find(req => req.requestId === requestId);
+      if (!request) {
+        throw new Error('Friend request not found');
+      }
+      
+      await townController.acceptFriendRequest(requestId);
       setFriendRequests(prev => prev.filter(req => req.requestId !== requestId));
-      setFriends(prev => [...prev, { friendId: result.friendId, friendUserName: result.friendUserName }]);
+      
+      // Track that we just accepted this friend to prevent duplicate toast
+      justAcceptedFriendIdRef.current = request.fromUserId;
+      
+      // Show toast for the accepter
       toast({
         title: 'Friend Added',
-        description: `${result.friendUserName} is now your friend`,
+        description: `You are now friends with ${request.fromUserName}`,
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
+      
+      // Clear the tracking after a short delay
+      setTimeout(() => {
+        justAcceptedFriendIdRef.current = null;
+      }, 1000);
+      
+      // Don't manually add friend here - let the socket event handle it
+      // This prevents duplicate friends from being added
+      // The socket event will trigger handleFriendAccepted which adds the friend
     } catch (err) {
       toast({
         title: 'Error',
@@ -214,6 +272,90 @@ export default function Profile(): JSX.Element {
         duration: 3000,
         isClosable: true,
       });
+    }
+  };
+
+  const handleRemoveFriend = async (friendId: string, friendUserName: string) => {
+    try {
+      await townController.removeFriend(friendId);
+      setFriends(prev => prev.filter(friend => friend.friendId !== friendId));
+      toast({
+        title: 'Friend Removed',
+        description: `${friendUserName} has been removed from your friends list`,
+        status: 'info',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to remove friend',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  // Get available users to add as friends (exclude current user and existing friends)
+  const availableUsers = players.filter(player => {
+    // Exclude current user
+    if (player.id === townController.userID) {
+      return false;
+    }
+    // Exclude existing friends
+    if (friends.some(friend => friend.friendId === player.id)) {
+      return false;
+    }
+    // Exclude users who have pending friend requests (sent to us or we sent to them)
+    if (friendRequests.some(request => 
+      request.fromUserId === player.id || request.toUserId === player.id
+    )) {
+      return false;
+    }
+    return true;
+  });
+
+  // Filter available users by search query
+  const filteredAvailableUsers = availableUsers.filter(player =>
+    player.userName.toLowerCase().includes(addFriendSearchQuery.toLowerCase())
+  );
+
+  const handleSendFriendRequestFromModal = async (toUserId: string, toUserName: string) => {
+    if (toUserId === townController.userID) {
+      toast({
+        title: 'Cannot send request',
+        description: 'You cannot send a friend request to yourself',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      setSendingRequestTo(toUserId);
+      await townController.sendFriendRequest(toUserId);
+      toast({
+        title: 'Friend Request Sent',
+        description: `Friend request sent to ${toUserName}`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      // Close modal after successful request
+      onClose();
+      setAddFriendSearchQuery('');
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to send friend request',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setSendingRequestTo(null);
     }
   };
 
@@ -402,6 +544,15 @@ export default function Profile(): JSX.Element {
         <Box>
           <Flex align="center" mb={4}>
             <Heading size="md">Friends ({friends.length})</Heading>
+            <Spacer />
+            <Button
+              leftIcon={<AddIcon />}
+              colorScheme="blue"
+              size="sm"
+              onClick={onOpen}
+            >
+              Add Friend
+            </Button>
           </Flex>
 
           {/* Search Bar */}
@@ -458,6 +609,14 @@ export default function Profile(): JSX.Element {
                         </Text>
                         </HStack>
                       </Box>
+                      <IconButton
+                        icon={<DeleteIcon />}
+                        size="sm"
+                        colorScheme="red"
+                        variant="ghost"
+                        aria-label={`Remove ${friend.friendUserName} from friends`}
+                        onClick={() => handleRemoveFriend(friend.friendId, friend.friendUserName)}
+                      />
                     </Flex>
                   </Box>
                 ))
@@ -482,6 +641,72 @@ export default function Profile(): JSX.Element {
           </Button>
         </HStack>
       </VStack>
+
+      {/* Add Friend Modal */}
+      <Modal isOpen={isOpen} onClose={onClose} size="md">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Add Friend</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <VStack spacing={4} align="stretch">
+              <InputGroup>
+                <InputLeftElement pointerEvents="none">
+                  <SearchIcon color="gray.400" />
+                </InputLeftElement>
+                <Input
+                  placeholder="Search users..."
+                  value={addFriendSearchQuery}
+                  onChange={(e) => setAddFriendSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+
+              {filteredAvailableUsers.length > 0 ? (
+                <VStack spacing={2} align="stretch" maxH="400px" overflowY="auto">
+                  {filteredAvailableUsers.map((player) => (
+                    <Box
+                      key={player.id}
+                      p={3}
+                      borderWidth="1px"
+                      borderRadius="md"
+                      borderColor={borderColor}
+                      _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
+                    >
+                      <Flex align="center">
+                        <Avatar size="sm" name={player.userName} mr={3} />
+                        <Box flex={1}>
+                          <Text fontWeight="medium">{player.userName}</Text>
+                        </Box>
+                        <IconButton
+                          icon={<AddIcon />}
+                          size="sm"
+                          colorScheme="blue"
+                          aria-label={`Send friend request to ${player.userName}`}
+                          onClick={() => handleSendFriendRequestFromModal(player.id, player.userName)}
+                          isLoading={sendingRequestTo === player.id}
+                        />
+                      </Flex>
+                    </Box>
+                  ))}
+                </VStack>
+              ) : (
+                <Text color="gray.500" textAlign="center" py={4}>
+                  {addFriendSearchQuery 
+                    ? 'No users found' 
+                    : availableUsers.length === 0
+                    ? 'No available users to add'
+                    : 'No users match your search'}
+                </Text>
+              )}
+            </VStack>
+          </ModalBody>
+          <ModalFooter>
+            <Button variant="ghost" onClick={onClose}>
+              Close
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
     </Box>
   );
 }
