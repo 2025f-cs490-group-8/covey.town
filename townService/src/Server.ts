@@ -1,3 +1,6 @@
+import { fileURLToPath } from 'url';
+import path from 'path';
+import dotenv from 'dotenv';
 import Express from 'express';
 import * as http from 'http';
 import CORS from 'cors';
@@ -11,6 +14,17 @@ import TownsStore from './lib/TownsStore';
 import { ClientToServerEvents, ServerToClientEvents } from './types/CoveyTownSocket';
 import { TownsController } from './town/TownsController';
 import { logError } from './Utils';
+
+const FILENAME = fileURLToPath(import.meta.url);
+const DIRNAME = path.dirname(FILENAME);
+
+dotenv.config({ path: path.resolve(DIRNAME, '../.env') });
+
+console.log('DB CONFIG:', {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  db: process.env.DB_NAME,
+});
 
 // Create the server instances
 const app = Express();

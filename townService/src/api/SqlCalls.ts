@@ -1,5 +1,23 @@
+/* eslint-disable prettier/prettier */
+
 import { createPool } from 'mysql2/promise';
 import * as bcrypt from 'bcrypt';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const FILENAME = fileURLToPath(import.meta.url);
+const DIRNAME = path.dirname(FILENAME);
+dotenv.config({ path: path.resolve(DIRNAME, '../../.env') });
+
+
+
+console.log('MYSQL CONNECTING WITH:', {
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT,
+  user: process.env.DB_USER,
+  db: process.env.DB_NAME,
+});
 
 async function constructBCRYPTHash(password: string) {
   const saltRounds = 10;
@@ -57,7 +75,7 @@ export class QuerySQL {
 
   async passwordChallenge(userPassword: string, uid: number) {
     const hashRequest = await this.getUserHash(uid);
-     if (!hashRequest) {
+      if (!hashRequest) {
     return false;
     }
     const storedHash = hashRequest.hash;
@@ -199,5 +217,7 @@ export class QuerySQL {
       console.error('Error unblocking user:', error);
       throw error;
     }
+    
   }
+  
 }

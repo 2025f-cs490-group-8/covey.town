@@ -42,72 +42,107 @@ function App() {
     townController?.disconnect();
   }, [townController]);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!username || !password) {
-      toast({
-        title: 'Error',
-        description: 'Please enter both username and password',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
+  const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!username || !password) {
+    toast({
+      title: 'Error',
+      description: 'Please enter both username and password',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:8081/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Invalid username or password');
     }
 
+    const data = await res.json();
+
+    // Save user session info
+    localStorage.setItem('authUser', JSON.stringify(data));
+
     setIsAuthenticated(true);
+
     toast({
       title: 'Success',
-      description: 'Logged in successfully',
+      description: `Welcome, ${data.name}!`,
       status: 'success',
       duration: 2000,
     });
-  };
+  } catch (err) {
+    toast({
+      title: 'Login failed',
+      description: err.message,
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
+const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!username || !email || !password || !confirmPassword) {
-      toast({
-        title: 'Error',
-        description: 'Please fill in all fields',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
-    }
+  if (!username || !email || !password || !confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Please fill in all fields',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
 
-    if (password !== confirmPassword) {
-      toast({
-        title: 'Error',
-        description: 'Passwords do not match',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
-    }
+  if (password !== confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Passwords do not match',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
 
-    if (password.length < 6) {
-      toast({
-        title: 'Error',
-        description: 'Password must be at least 6 characters',
-        status: 'error',
-        duration: 3000,
-      });
-      return;
+  try {
+    const res = await fetch('http://localhost:8081/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Registration failed');
     }
 
     toast({
       title: 'Success',
-      description: 'Account created! Please log in.',
+      description: 'Account created successfully! Please log in.',
       status: 'success',
       duration: 3000,
     });
-    
+
+    // Switch back to login view
     setShowRegister(false);
     setPassword('');
     setConfirmPassword('');
-  };
+
+  } catch (err: any) {
+    toast({
+      title: 'Error creating account',
+      description: err.message,
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
 
   if (!isAuthenticated) {
     return (
@@ -368,7 +403,7 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
   
   const appContent = (
     <AppStateProvider>
