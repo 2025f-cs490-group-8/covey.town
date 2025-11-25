@@ -125,7 +125,9 @@ export type TownEvents = {
    * @param obj the interactable that is being interacted with
    */
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
-};
+  
+  teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
+  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string;}) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -149,8 +151,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   /**
    * The REST API client to access the townsService
    */
-  private _townsService: TownsService;
-
+  private _townsService: TownsServiceClient;
   /**
    * The login controller is used by the frontend application to manage logging in to a town,
    * and is also used to log out of a town.
@@ -243,9 +244,10 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     const url = 'http://localhost:8081';
     assert(url);
     this._socket = io(url, { auth: { userName, townID } });
-    this._townsService = new TownsServiceClient({ BASE: url }).towns;
-    this.registerSocketListeners();
+    this._townsService = new TownsServiceClient({ BASE: url });
+      this.registerSocketListeners();  
   }
+  
 
   public get sessionToken() {
     return this._sessionToken || '';
@@ -371,18 +373,26 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     this._interactableEmitter.emit('endInteraction', objectNoLongerInteracting);
   }
 
-  public async getChatMessages(_interactableID: string | undefined): Promise<ChatMessage[]> {
-    const rawResponse = await this._townsService.getChatMessages(
-      this._townID,
-      this.sessionToken,
-      _interactableID,
-    );
-    return rawResponse.map(eachMessage => ({
-      ...eachMessage,
-      dateCreated: new Date(eachMessage.dateCreated),
-    }));
-  }
+      public async getChatMessages(interactableID?: string): Promise<ChatMessage[]> {
+      try {
+        const rawMessages = await this._townsService.towns.getChatMessages(
+          this._townID,
+          this.sessionToken,
+          interactableID,
+        );
 
+        return rawMessages.map(m => ({
+          author: 'system',
+          sid: crypto.randomUUID(),
+          body: '',
+          dateCreated: new Date(m.dateCreated),
+          interactableID,
+        }));
+      } catch (err) {
+        console.error('getChatMessages failed:', err);
+        return [];
+      }
+    }
   /**
    * Registers listeners for the events that can come from the server to our socket
    */
@@ -390,8 +400,17 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     /**
      * On chat messages, forward the messages to listeners who subscribe to the controller's events
      */
-    this._socket.on('chatMessage', message => {
+      this._socket.on('teleportRequestReceived', data => {
+      this.emit('teleportRequestReceived', data);
+    });
+
+    /** TELEPORT: incoming response */
+      this._socket.on('teleportResult', data => {
+      this.emit('teleportResult', data);
+    });
+     this._socket.on('chatMessage', message => {
       this.emit('chatMessage', message);
+      
     });
 
     /**
@@ -625,6 +644,19 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       }
     }
   }
+    /**
+     * Send a teleport request to another player
+     */
+    public async sendTeleportRequest(toUserId: string): Promise<void> {
+      this._socket.emit('teleportRequest', { toUserId });
+    }
+
+    /**
+     * Respond to a teleport request
+     */
+    public async respondTeleport(fromUserId: string, accepted: boolean): Promise<void> {
+      this._socket.emit('teleportResponse', { fromUserId, accepted });
+    }
 
   /**
    * Update user status
@@ -809,7 +841,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     roomUpdatePassword: string,
     updatedSettings: { isPubliclyListed: boolean; friendlyName: string },
   ) {
-    await this._townsService.updateTown(this._townID, roomUpdatePassword, updatedSettings);
+    await this._townsService.towns.updateTown(this._townID, roomUpdatePassword, updatedSettings);
   }
 
   /**
@@ -819,7 +851,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param roomUpdatePassword
    */
   async deleteTown(roomUpdatePassword: string) {
-    await this._townsService.deleteTown(this._townID, roomUpdatePassword);
+    await this._townsService.towns.deleteTown(this._townID, roomUpdatePassword);
   }
 
   /**
@@ -830,7 +862,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param newArea
    */
   async createConversationArea(newArea: { topic?: string; id: string; occupants: Array<string> }) {
-    await this._townsService.createConversationArea(this.townID, this.sessionToken, newArea);
+    await this._townsService.towns.createConversationArea(this.townID, this.sessionToken, newArea);
   }
 
   /**
@@ -841,7 +873,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param newArea
    */
   async createViewingArea(newArea: Omit<ViewingAreaModel, 'type'>) {
-    await this._townsService.createViewingArea(this.townID, this.sessionToken, newArea);
+    await this._townsService.towns.createViewingArea(this.townID, this.sessionToken, newArea);
   }
 
   /**
@@ -987,6 +1019,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   private _playersByIDs(playerIDs: string[]): PlayerController[] {
     return this._playersInternal.filter(eachPlayer => playerIDs.includes(eachPlayer.id));
   }
+  
 }
 
 /**
