@@ -50,12 +50,7 @@ export default class FriendsStore {
   /**
    * Send a friend request from one user to another
    */
-  sendFriendRequest(
-    fromUserId: string,
-    fromUserName: string,
-    toUserId: string,
-    toUserName: string,
-  ): FriendRequest {
+  sendFriendRequest(fromUserId: string, fromUserName: string, toUserId: string, toUserName: string): FriendRequest {
     // Check if they're already friends
     if (this.areFriends(fromUserId, toUserId)) {
       throw new Error('Users are already friends');
@@ -276,3 +271,4 @@ export default class FriendsStore {
     );
   }
 }
+

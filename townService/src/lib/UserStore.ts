@@ -110,3 +110,4 @@ export default class UserStore {
     return undefined;
   }
 }
+
