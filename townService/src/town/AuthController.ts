@@ -114,11 +114,23 @@ export class AuthController extends Controller {
     try {
       console.log('Creating user in DB:', { username, email });
       await this._db.constructNewUser(username, email, password);
-    } catch (err) {
+    } catch (err: any) {
       console.error('MYSQL INSERT ERROR:', err);
-      throw new InvalidParametersError(
-        err instanceof Error ? err.message : 'Database insert failed',
-      );
+      // Extract more detailed error message
+      let errorMessage = 'Database insert failed';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err?.code) {
+        // MySQL error codes
+        if (err.code === 'ER_DUP_ENTRY') {
+          errorMessage = 'Username or email already exists';
+        } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+          errorMessage = 'Database connection failed. Please check database configuration.';
+        } else {
+          errorMessage = err.message || `Database error: ${err.code}`;
+        }
+      }
+      throw new InvalidParametersError(errorMessage);
     }
 
     return { message: 'User registered successfully' };

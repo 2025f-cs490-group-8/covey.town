@@ -119,12 +119,15 @@ const handleRegister = async (e: React.FormEvent) => {
     });
 
     if (!res.ok) {
-      throw new Error('Registration failed');
+      const errorData = await res.json().catch(() => ({ message: 'Registration failed' }));
+      throw new Error(errorData.message || `Registration failed: ${res.status} ${res.statusText}`);
     }
+
+    const data = await res.json();
 
     toast({
       title: 'Success',
-      description: 'Account created successfully! Please log in.',
+      description: data.message || 'Account created successfully! Please log in.',
       status: 'success',
       duration: 3000,
     });
@@ -137,7 +140,7 @@ const handleRegister = async (e: React.FormEvent) => {
   } catch (err: any) {
     toast({
       title: 'Error creating account',
-      description: err.message,
+      description: err.message || 'An unexpected error occurred',
       status: 'error',
       duration: 3000,
     });

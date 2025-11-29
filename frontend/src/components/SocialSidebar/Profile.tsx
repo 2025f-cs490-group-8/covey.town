@@ -143,6 +143,7 @@ useEffect(() => {
   townController.addListener('teleportRequestReceived', handler);
   return () => townController.removeListener('teleportRequestReceived', handler);
 }, [townController]);
+
   // Load friends and friend requests
   useEffect(() => {
     const loadData = async () => {

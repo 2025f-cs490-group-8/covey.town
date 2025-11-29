@@ -280,13 +280,17 @@ export class TownsController extends Controller {
 
       const friend = this._friendsStore.acceptFriendRequest(requestBody.requestId, player.id);
 
+      // Get user statuses for both players
+      const senderStatus = this._friendsStore.getUserStatus(request.fromUserId);
+      const accepterStatus = this._friendsStore.getUserStatus(player.id);
+
       // Notify the sender (fromUserId) that their request was accepted
       const senderPlayer = town.players.find(p => p.id === request.fromUserId);
       if (senderPlayer) {
         town.emitFriendRequestAccepted(senderPlayer.id, {
           friendId: player.id,
           friendUserName: player.userName,
-          friendStatus: senderFriendStatus,
+          friendStatus: accepterStatus,
         });
       }
 
@@ -294,7 +298,7 @@ export class TownsController extends Controller {
       town.emitFriendRequestAccepted(player.id, {
         friendId: request.fromUserId,
         friendUserName: request.fromUserName,
-        friendStatus: accepterFriendStatus,
+        friendStatus: senderStatus,
       });
 
       return { friendId: friend.friendId, friendUserName: friend.friendUserName };

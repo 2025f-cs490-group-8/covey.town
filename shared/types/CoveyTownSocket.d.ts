@@ -266,7 +266,7 @@ export interface ServerToClientEvents {
   friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
   userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
   teleportRequestReceived: (data: { fromUserId: string;fromUserName: string;}) => void;
-  teleportResult: (data: {success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string;}) => void;
+  teleportResult: (data: {success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
 }
 
 export interface ClientToServerEvents {
