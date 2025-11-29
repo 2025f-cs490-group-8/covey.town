@@ -17,6 +17,7 @@ import {
 
 import { Town, TownCreateParams, TownCreateResponse } from '../api/Model';
 import InvalidParametersError from '../lib/InvalidParametersError';
+import FriendsStore from '../lib/FriendsStore';
 import CoveyTownsStore from '../lib/TownsStore';
 import {
   ChatMessage,
@@ -35,6 +36,8 @@ import {
 // eslint-disable-next-line import/prefer-default-export
 export class TownsController extends Controller {
   private _townsStore: CoveyTownsStore = CoveyTownsStore.getInstance();
+
+  private _friendsStore: FriendsStore = FriendsStore.getInstance();
 
   /**
    * List all towns that are set to be publicly available
@@ -211,6 +214,25 @@ export class TownsController extends Controller {
 
     const newPlayer = await town.addPlayer(userName, socket);
     assert(newPlayer.videoToken);
+    console.log('Generated token:', newPlayer.videoToken);
+    console.log('Identity:', newPlayer.userName);
+
+    // Track that this player is in this town
+    this._townsStore.setPlayerTown(newPlayer.id, townID);
+
+    // Check if this username had friends under a different player ID and migrate them
+    // This ensures friend lists persist when switching towns
+    const oldPlayerId = this._friendsStore.getPlayerIdForUsername(userName);
+    if (oldPlayerId && oldPlayerId !== newPlayer.id) {
+      // Migrate friends from old player ID to new player ID
+      this._friendsStore.migratePlayerFriends(oldPlayerId, newPlayer.id, userName);
+    }
+    // Always update the username to player ID mapping
+    this._friendsStore.migratePlayerFriends(newPlayer.id, newPlayer.id, userName);
+
+    // Set default status to Online when user joins
+    this._friendsStore.setUserStatus(newPlayer.id, 'Online');
+
     socket.emit('initialize', {
       userID: newPlayer.id,
       sessionToken: newPlayer.sessionToken,

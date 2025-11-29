@@ -2,6 +2,7 @@ import { ITiledMap } from '@jonbell/tiled-map-type-guard';
 import * as fs from 'fs/promises';
 import { customAlphabet } from 'nanoid';
 import Town from '../town/Town';
+import Player from './Player';
 import { TownEmitterFactory } from '../types/CoveyTownSocket';
 
 function passwordMatches(provided: string, expected: string): boolean {
@@ -29,6 +30,8 @@ export default class TownsStore {
   private _towns: Town[] = [];
 
   private _emitterFactory: TownEmitterFactory;
+
+  private _playerTowns: Map<string, string> = new Map();
 
   static initializeTownsStore(emitterFactory: TownEmitterFactory) {
     TownsStore._instance = new TownsStore(emitterFactory);
@@ -142,5 +145,80 @@ export default class TownsStore {
       return true;
     }
     return false;
+  }
+
+  /**
+   * Track that a player has joined a town
+   * @param playerId The ID of the player
+   * @param townID The ID of the town they joined
+   */
+  setPlayerTown(playerId: string, townID: string): void {
+    this._playerTowns.set(playerId, townID);
+  }
+
+  /**
+   * Remove tracking for a player (when they leave a town)
+   * @param playerId The ID of the player
+   */
+  removePlayerTown(playerId: string): void {
+    this._playerTowns.delete(playerId);
+  }
+
+  /**
+   * Get the town ID that a player is currently in
+   * @param playerId The ID of the player
+   * @returns The town ID, or undefined if the player is not in any town
+   */
+  getPlayerTown(playerId: string): string | undefined {
+    return this._playerTowns.get(playerId);
+   }
+
+  /**
+   * Find a player across all towns by their user ID
+   * @param playerId The ID of the player to find
+   * @returns The player and their town, or undefined if not found
+   */
+  findPlayerAcrossTowns(playerId: string): { player: Player; town: Town } | undefined {
+    const townID = this._playerTowns.get(playerId);
+    if (!townID) {
+      return undefined;
+    }
+    const town = this.getTownByID(townID);
+    if (!town) {
+      return undefined;
+    }
+    const player = town.players.find(p => p.id === playerId);
+    if (!player) {
+      return undefined;
+    }
+    return { player, town };
+  }
+
+  /**
+   * Search for players by username across all towns
+   * @param username The username to search for (case-insensitive partial match)
+   * @param excludePlayerId Optional player ID to exclude from results
+   * @returns Array of players with their town information
+   */
+  searchPlayersByUsername(username: string, excludePlayerId?: string): Array<{ player: Player; town: Town; townID: string }> {
+    const results: Array<{ player: Player; town: Town; townID: string }> = [];
+    const searchLower = username.toLowerCase();
+
+    for (const town of this._towns) {
+      for (const player of town.players) {
+        if (excludePlayerId && player.id === excludePlayerId) {
+          continue;
+        }
+        if (player.userName.toLowerCase().includes(searchLower)) {
+          results.push({
+            player,
+            town,
+            townID: town.townID,
+          });
+        }
+      }
+    }
+
+    return results;
   }
 }
