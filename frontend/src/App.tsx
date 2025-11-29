@@ -3,6 +3,7 @@ import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
 import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import TownController from './classes/TownController';
 import { ChatProvider } from './components/VideoCall/VideoFrontend/components/ChatProvider';
 import ErrorDialog from './components/VideoCall/VideoFrontend/components/ErrorDialog/ErrorDialog';
@@ -128,13 +129,28 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  
+  React.useEffect(() => {
+    console.log('🔍 GoogleOAuthProvider Client ID:', googleClientId);
+    console.log('🔍 NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  }, [googleClientId]);
+  
+  const appContent = (
+    <AppStateProvider>
+      <AppOrDebugApp />
+    </AppStateProvider>
+  );
+  
+  // Always wrap with GoogleOAuthProvider to prevent hook errors
+  // Use a dummy client ID if not configured - GoogleLoginButton will handle showing disabled state
   return (
     <BrowserRouter>
       <ChakraProvider>
         <MuiThemeProvider theme={theme}>
-          <AppStateProvider>
-            <AppOrDebugApp />
-          </AppStateProvider>
+          <GoogleOAuthProvider clientId={googleClientId || 'dummy-client-id-for-hook'}>
+            {appContent}
+          </GoogleOAuthProvider>
         </MuiThemeProvider>
       </ChakraProvider>
     </BrowserRouter>
