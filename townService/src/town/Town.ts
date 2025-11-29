@@ -535,15 +535,8 @@ export default class Town {
     // Set up a listener for cross-town teleport responses
     socket.on('crossTownTeleportResponse', (data: { fromUserId: string; accepted: boolean }) => {
       try {
-        const requestingPlayer = this._players.find(p => p.id === data.fromUserId);
-        if (!requestingPlayer) {
-          socket.emit('crossTownTeleportResult', {
-            success: false,
-            accepted: false,
-            reason: 'Requesting player not found',
-          });
-          return;
-        }
+        // Note: The requesting player (fromUserId) is in a different town, so we don't check
+        // if they're in this town. We just need to notify them of the response.
 
         if (!data.accepted) {
           // Notify the requesting player that the request was declined
@@ -568,21 +561,44 @@ export default class Town {
         // Accepted - notify the requesting player to join this town
         const townsStore = CoveyTownsStore.getInstance();
         const requestingTownID = townsStore.getPlayerTown(data.fromUserId);
-        if (requestingTownID) {
-          const requestingTown = townsStore.getTownByID(requestingTownID);
-          if (requestingTown) {
-            const requestingSocket = requestingTown.getPlayerSocket(data.fromUserId);
-            if (requestingSocket) {
-              requestingSocket.emit('crossTownTeleportResult', {
-                success: true,
-                accepted: true,
-                targetTownID: this._townID,
-                targetTownName: this._friendlyName,
-              });
-            }
-          }
+        if (!requestingTownID) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player is not in any town',
+          });
+          return;
         }
 
+        const requestingTown = townsStore.getTownByID(requestingTownID);
+        if (!requestingTown) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player\'s town not found',
+          });
+          return;
+        }
+
+        const requestingSocket = requestingTown.getPlayerSocket(data.fromUserId);
+        if (!requestingSocket || !requestingSocket.connected) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player is not connected',
+          });
+          return;
+        }
+
+        // Notify the requesting player that their request was accepted
+        requestingSocket.emit('crossTownTeleportResult', {
+          success: true,
+          accepted: true,
+          targetTownID: this._townID,
+          targetTownName: this._friendlyName,
+        });
+
+        // Also notify the accepting player (the one who sent the response)
         socket.emit('crossTownTeleportResult', {
           success: true,
           accepted: true,

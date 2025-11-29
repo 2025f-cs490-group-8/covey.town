@@ -630,6 +630,16 @@ export class TownsController extends Controller {
     // Track that this player is in this town
     this._townsStore.setPlayerTown(newPlayer.id, townID);
 
+    // Check if this username had friends under a different player ID and migrate them
+    // This ensures friend lists persist when switching towns
+    const oldPlayerId = this._friendsStore.getPlayerIdForUsername(userName);
+    if (oldPlayerId && oldPlayerId !== newPlayer.id) {
+      // Migrate friends from old player ID to new player ID
+      this._friendsStore.migratePlayerFriends(oldPlayerId, newPlayer.id, userName);
+    }
+    // Always update the username to player ID mapping
+    this._friendsStore.migratePlayerFriends(newPlayer.id, newPlayer.id, userName);
+
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(newPlayer.id, 'Online');
 

@@ -40,6 +40,7 @@ import useTownController from '../../hooks/useTownController';
 import { usePlayers } from '../../classes/TownController';
 import { ArrowRightIcon } from '@chakra-ui/icons';
 import useLoginController from '../../hooks/useLoginController';
+import useVideoContext from '../VideoCall/VideoFrontend/hooks/useVideoContext/useVideoContext';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
@@ -65,6 +66,7 @@ export default function Profile(): JSX.Element {
   const teleportModal = useDisclosure();
   const townController = useTownController();
   const loginController = useLoginController();
+  const { connect: videoConnect } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
@@ -191,7 +193,11 @@ useEffect(() => {
           townName: data.targetTownName 
         } 
       }));
-    } else if (!data.success || !data.accepted) {
+    } else if (data.success && data.accepted === undefined) {
+      // Request was sent successfully, but not yet accepted/declined
+      // Don't show any message - the initial "request sent" toast is already shown
+      return;
+    } else if (!data.success || data.accepted === false) {
       toast({
         title: 'Teleport Failed',
         description: data.reason || 'Teleport request was declined',
@@ -342,7 +348,6 @@ useEffect(() => {
         });
         
         const { setTownController } = loginController;
-        const { connect: videoConnect } = useVideoContext();
         
         // Disconnect current town
         townController.disconnect();
@@ -375,7 +380,7 @@ useEffect(() => {
     return () => {
       window.removeEventListener('switchTown', handleSwitchTown as EventListener);
     };
-  }, [townController, loginController, username, toast]);
+  }, [townController, loginController, username, toast, videoConnect]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {

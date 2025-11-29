@@ -36,6 +36,9 @@ export default class FriendsStore {
   // Map from userId to their current status
   private _userStatuses: Map<string, UserStatus> = new Map();
 
+  // Map from username to their current player ID (for friend migration when switching towns)
+  private _usernameToPlayerId: Map<string, string> = new Map();
+
   static getInstance(): FriendsStore {
     if (FriendsStore._instance === undefined) {
       FriendsStore._instance = new FriendsStore();
@@ -274,5 +277,103 @@ export default class FriendsStore {
         ((req.fromUserId === userId1 && req.toUserId === userId2) ||
           (req.fromUserId === userId2 && req.toUserId === userId1)),
     );
+  }
+
+  /**
+   * Migrate friends from an old player ID to a new player ID
+   * This is used when a player switches towns and gets a new player ID
+   * @param oldPlayerId The old player ID
+   * @param newPlayerId The new player ID
+   * @param userName The username (for verification)
+   */
+  migratePlayerFriends(oldPlayerId: string, newPlayerId: string, userName: string): void {
+    // Always update the username to player ID mapping
+    this._usernameToPlayerId.set(userName, newPlayerId);
+    
+    if (oldPlayerId === newPlayerId) {
+      return; // No migration needed (just updating the mapping)
+    }
+
+    // Migrate friends
+    const oldFriends = this._friends.get(oldPlayerId);
+    if (oldFriends && oldFriends.length > 0) {
+      // Verify that the old friends belong to the same username
+      const validFriends = oldFriends.filter(f => f.userName === userName);
+      if (validFriends.length > 0) {
+        // Set friends for new player ID (merge with existing if any)
+        if (!this._friends.has(newPlayerId)) {
+          this._friends.set(newPlayerId, []);
+        }
+        const newPlayerFriends = this._friends.get(newPlayerId)!;
+        
+        // Add friends that don't already exist
+        validFriends.forEach(oldFriend => {
+          const migratedFriend = {
+            ...oldFriend,
+            userId: newPlayerId,
+          };
+          
+          // Check if this friend already exists (by friendId)
+          if (!newPlayerFriends.some(f => f.friendId === migratedFriend.friendId)) {
+            newPlayerFriends.push(migratedFriend);
+          }
+        });
+        
+        // Update friend references in other players' friend lists
+        validFriends.forEach(friend => {
+          const otherPlayerFriends = this._friends.get(friend.friendId);
+          if (otherPlayerFriends) {
+            const friendIndex = otherPlayerFriends.findIndex(f => f.friendId === oldPlayerId);
+            if (friendIndex !== -1) {
+              // Update to point to new player ID
+              otherPlayerFriends[friendIndex] = {
+                ...otherPlayerFriends[friendIndex],
+                friendId: newPlayerId,
+              };
+            }
+          }
+        });
+      }
+    }
+
+    // Migrate friend requests
+    const oldRequests = this._friendRequests.get(oldPlayerId);
+    if (oldRequests && oldRequests.length > 0) {
+      if (!this._friendRequests.has(newPlayerId)) {
+        this._friendRequests.set(newPlayerId, []);
+      }
+      const newPlayerRequests = this._friendRequests.get(newPlayerId)!;
+      
+      oldRequests.forEach(request => {
+        // Update the request to use new player ID
+        if (request.fromUserId === oldPlayerId) {
+          request.fromUserId = newPlayerId;
+        }
+        if (request.toUserId === oldPlayerId) {
+          request.toUserId = newPlayerId;
+        }
+        
+        // Add to new player's requests if not already there
+        const existingRequest = newPlayerRequests.find(r => r.id === request.id);
+        if (!existingRequest) {
+          newPlayerRequests.push(request);
+        }
+      });
+    }
+
+    // Migrate user status
+    const oldStatus = this._userStatuses.get(oldPlayerId);
+    if (oldStatus) {
+      this._userStatuses.set(newPlayerId, oldStatus);
+    }
+  }
+
+  /**
+   * Get the current player ID for a username
+   * @param userName The username
+   * @returns The current player ID, or undefined if not found
+   */
+  getPlayerIdForUsername(userName: string): string | undefined {
+    return this._usernameToPlayerId.get(userName);
   }
 }

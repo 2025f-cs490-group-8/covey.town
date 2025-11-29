@@ -172,7 +172,7 @@ export default class TownsStore {
    */
   getPlayerTown(playerId: string): string | undefined {
     return this._playerTowns.get(playerId);
-  }
+   }
 
   /**
    * Find a player across all towns by their user ID
