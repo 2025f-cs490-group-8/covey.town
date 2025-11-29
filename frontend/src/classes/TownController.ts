@@ -127,7 +127,9 @@ export type TownEvents = {
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
   
   teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
-  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;};
+  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
+  crossTownTeleportRequestReceived: (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
+  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string }) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -437,6 +439,17 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       }
       this.emit('teleportResult', data);
     });
+
+    // Cross-town teleport request received
+    this._socket.on('crossTownTeleportRequestReceived', data => {
+      this.emit('crossTownTeleportRequestReceived', data);
+    });
+
+    // Cross-town teleport result
+    this._socket.on('crossTownTeleportResult', data => {
+      this.emit('crossTownTeleportResult', data);
+    });
+
      this._socket.on('chatMessage', message => {
       this.emit('chatMessage', message);
       
@@ -707,6 +720,23 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       this._socket.emit('teleportResponse', { fromUserId, accepted });
     }
 
+    /**
+     * Send a cross-town teleport request to another player
+     * @param toUserId The ID of the player to teleport to
+     */
+    public async sendCrossTownTeleportRequest(toUserId: string): Promise<void> {
+      this._socket.emit('crossTownTeleportRequest', { toUserId });
+    }
+
+    /**
+     * Respond to a cross-town teleport request
+     * @param fromUserId The ID of the player requesting the teleport
+     * @param accepted Whether to accept the request
+     */
+    public async respondCrossTownTeleport(fromUserId: string, accepted: boolean): Promise<void> {
+      this._socket.emit('crossTownTeleportResponse', { fromUserId, accepted });
+    }
+
   /**
    * Update user status
    * @param status The new status
@@ -734,9 +764,41 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   }
 
   /**
+   * Search for players by username across all towns
+   * @param query The username search query
+   * @returns Array of matching players with their town information
+   */
+  public async searchPlayers(query: string): Promise<Array<{ playerId: string; userName: string; townID: string; townName: string }>> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/searchPlayers?query=${encodeURIComponent(query)}`, {
+      method: 'GET',
+      headers: {
+        'X-Session-Token': this.sessionToken,
+      },
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to search players');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
    * Get the current user's friend list
    */
-  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string }>> {
+  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string; friendTownID?: string; friendTownName?: string }>> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'GET',

@@ -194,6 +194,7 @@ export class TownsController extends Controller {
 
   /**
    * Send a friend request to another user
+   * Can send to players in the same town or different towns
    * @param townID ID of the town
    * @param sessionToken session token of the player making the request
    * @param requestBody The friend request details
@@ -214,15 +215,17 @@ export class TownsController extends Controller {
       throw new InvalidParametersError('Invalid values specified');
     }
 
-    // Find the target player in the town
-    const toPlayer = town.players.find(p => p.id === requestBody.toUserId);
-    if (!toPlayer) {
-      throw new InvalidParametersError('Target user not found in town');
-    }
-
-    if (fromPlayer.id === toPlayer.id) {
+    if (fromPlayer.id === requestBody.toUserId) {
       throw new InvalidParametersError('Cannot send friend request to yourself');
     }
+
+    // Find the target player across all towns (not just current town)
+    const targetPlayerInfo = this._townsStore.findPlayerAcrossTowns(requestBody.toUserId);
+    if (!targetPlayerInfo) {
+      throw new InvalidParametersError('Target user not found in any town');
+    }
+
+    const { player: toPlayer, town: targetTown } = targetPlayerInfo;
 
     try {
       const request = this._friendsStore.sendFriendRequest(
@@ -232,8 +235,8 @@ export class TownsController extends Controller {
         toPlayer.userName,
       );
 
-      // Notify the target player via socket if they're in the same town
-      town.emitFriendRequestToPlayer(toPlayer.id, {
+      // Notify the target player via socket (works across towns)
+      targetTown.emitFriendRequestToPlayer(toPlayer.id, {
         requestId: request.id,
         fromUserId: request.fromUserId,
         fromUserName: request.fromUserName,
@@ -285,9 +288,10 @@ export class TownsController extends Controller {
       const accepterStatus = this._friendsStore.getUserStatus(player.id);
 
       // Notify the sender (fromUserId) that their request was accepted
-      const senderPlayer = town.players.find(p => p.id === request.fromUserId);
-      if (senderPlayer) {
-        town.emitFriendRequestAccepted(senderPlayer.id, {
+      // Find sender across all towns (they might be in a different town)
+      const senderInfo = this._townsStore.findPlayerAcrossTowns(request.fromUserId);
+      if (senderInfo) {
+        senderInfo.town.emitFriendRequestAccepted(senderInfo.player.id, {
           friendId: player.id,
           friendUserName: player.userName,
           friendStatus: accepterStatus,
@@ -341,6 +345,42 @@ export class TownsController extends Controller {
   }
 
   /**
+   * Search for players by username across all towns
+   * @param townID ID of the town (used for authentication)
+   * @param sessionToken session token of the player
+   * @param query Username search query
+   * @returns list of matching players with their town information
+   */
+  @Get('{townID}/searchPlayers')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async searchPlayers(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Query() query: string,
+  ): Promise<Array<{ playerId: string; userName: string; townID: string; townName: string }>> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    if (!query || query.trim().length === 0) {
+      return [];
+    }
+
+    const results = this._townsStore.searchPlayersByUsername(query.trim(), player.id);
+    return results.map(({ player: foundPlayer, townID: foundTownID, town: foundTown }) => ({
+      playerId: foundPlayer.id,
+      userName: foundPlayer.userName,
+      townID: foundTownID,
+      townName: foundTown.friendlyName,
+    }));
+  }
+
+  /**
    * Get friend list for the current user
    * @param townID ID of the town
    * @param sessionToken session token of the player
@@ -351,7 +391,7 @@ export class TownsController extends Controller {
   public async getFriends(
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
-  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string }>> {
+  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string }>> {
     const town = this._townsStore.getTownByID(townID);
     if (!town) {
       throw new InvalidParametersError('Invalid values specified');
@@ -362,11 +402,70 @@ export class TownsController extends Controller {
     }
 
     const friends = this._friendsStore.getFriendsWithStatus(player.id);
-    return friends.map(f => ({
-      friendId: f.friendId,
-      friendUserName: f.friendUserName,
-      friendStatus: f.friendStatus,
-    }));
+    return friends.map(f => {
+      const friendTownID = this._townsStore.getPlayerTown(f.friendId);
+      const friendTown = friendTownID ? this._townsStore.getTownByID(friendTownID) : undefined;
+      return {
+        friendId: f.friendId,
+        friendUserName: f.friendUserName,
+        friendStatus: f.friendStatus,
+        friendTownID: friendTownID || undefined,
+        friendTownName: friendTown?.friendlyName || undefined,
+      };
+    });
+  }
+
+  /**
+   * Get a friend's current town information
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param friendId The ID of the friend to get town info for
+   * @returns The friend's town information
+   */
+  @Get('{townID}/friend/{friendId}/town')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async getFriendTown(
+    @Path() townID: string,
+    @Path() friendId: string,
+    @Header('X-Session-Token') sessionToken: string,
+  ): Promise<{ townID: string; friendlyName: string; friendLocation?: { x: number; y: number; rotation: string } } | null> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Check if they are friends
+    if (!this._friendsStore.areFriends(player.id, friendId) && !this._friendsStore.areFriends(friendId, player.id)) {
+      throw new InvalidParametersError('Users are not friends');
+    }
+
+    const friendTownID = this._townsStore.getPlayerTown(friendId);
+    if (!friendTownID) {
+      return null; // Friend is not in any town
+    }
+
+    const friendTown = this._townsStore.getTownByID(friendTownID);
+    if (!friendTown) {
+      return null; // Town doesn't exist
+    }
+
+    // Get friend's location if they're in the same town
+    const friendPlayer = friendTown.players.find(p => p.id === friendId);
+    const friendLocation = friendPlayer ? {
+      x: friendPlayer.location.x,
+      y: friendPlayer.location.y,
+      rotation: friendPlayer.location.rotation,
+    } : undefined;
+
+    return {
+      townID: friendTownID,
+      friendlyName: friendTown.friendlyName,
+      friendLocation,
+    };
   }
 
   /**
@@ -527,6 +626,9 @@ export class TownsController extends Controller {
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
     console.log('Identity:', newPlayer.userName);
+
+    // Track that this player is in this town
+    this._townsStore.setPlayerTown(newPlayer.id, townID);
 
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(newPlayer.id, 'Online');

@@ -39,6 +39,7 @@ import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon 
 import useTownController from '../../hooks/useTownController';
 import { usePlayers } from '../../classes/TownController';
 import { ArrowRightIcon } from '@chakra-ui/icons';
+import useLoginController from '../../hooks/useLoginController';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
@@ -46,6 +47,8 @@ interface Friend {
   friendId: string;
   friendUserName: string;
   friendStatus?: UserStatus;
+  friendTownID?: string;
+  friendTownName?: string;
 }
 
 interface FriendRequest {
@@ -61,12 +64,15 @@ interface FriendRequest {
 export default function Profile(): JSX.Element {
   const teleportModal = useDisclosure();
   const townController = useTownController();
+  const loginController = useLoginController();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const players = usePlayers();
   const [incomingTeleport, setIncomingTeleport] = useState<{fromUserId: string; fromUserName: string} | null>(null);
+  const [incomingCrossTownTeleport, setIncomingCrossTownTeleport] = useState<{fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string} | null>(null);
+  const crossTownTeleportModal = useDisclosure();
   const username = townController.userName;
   const townId = townController.townID;
   const friendlyName = townController.friendlyName;
@@ -90,10 +96,41 @@ export default function Profile(): JSX.Element {
   const [addFriendSearchQuery, setAddFriendSearchQuery] = useState('');
   const [sendingRequestTo, setSendingRequestTo] = useState<string | null>(null);
   const justAcceptedFriendIdRef = useRef<string | null>(null);
+  const [searchResults, setSearchResults] = useState<Array<{ playerId: string; userName: string; townID: string; townName: string }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-  const handleSendTeleportRequest = async (targetPlayerId: string) => {
+  const handleSendTeleportRequest = async (friend: Friend) => {
         try {
-          await townController.sendTeleportRequest(targetPlayerId);
+          // Check friend status first
+          if (friend.friendStatus !== 'Online') {
+            toast({
+              title: 'Cannot Teleport',
+              description: `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.`,
+              status: 'error',
+              duration: 3000,
+            });
+            return;
+          }
+
+          // Check if friend is in any town
+          if (!friend.friendTownID) {
+            toast({
+              title: 'Cannot Teleport',
+              description: `${friend.friendUserName} is not in any town.`,
+              status: 'error',
+              duration: 3000,
+            });
+            return;
+          }
+
+          // Check if friend is in the same town
+          if (friend.friendTownID === townId) {
+            // Same town - use regular teleport
+            await townController.sendTeleportRequest(friend.friendId);
+          } else {
+            // Different town - use cross-town teleport
+            await townController.sendCrossTownTeleportRequest(friend.friendId);
+          }
 
           toast({
             title: 'Teleport request sent',
@@ -140,8 +177,38 @@ useEffect(() => {
     teleportModal.onOpen();
   };
 
+  const crossTownHandler = (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => {
+    setIncomingCrossTownTeleport(payload);
+    crossTownTeleportModal.onOpen();
+  };
+
+  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string }) => {
+    if (data.success && data.accepted && data.targetTownID) {
+      // Dispatch custom event for town switching - will be handled by separate useEffect
+      window.dispatchEvent(new CustomEvent('switchTown', { 
+        detail: { 
+          townID: data.targetTownID,
+          townName: data.targetTownName 
+        } 
+      }));
+    } else if (!data.success || !data.accepted) {
+      toast({
+        title: 'Teleport Failed',
+        description: data.reason || 'Teleport request was declined',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
+
   townController.addListener('teleportRequestReceived', handler);
-  return () => townController.removeListener('teleportRequestReceived', handler);
+  townController.addListener('crossTownTeleportRequestReceived', crossTownHandler);
+  townController.addListener('crossTownTeleportResult', crossTownResultHandler);
+  return () => {
+    townController.removeListener('teleportRequestReceived', handler);
+    townController.removeListener('crossTownTeleportRequestReceived', crossTownHandler);
+    townController.removeListener('crossTownTeleportResult', crossTownResultHandler);
+  };
 }, [townController]);
 
   // Load friends and friend requests
@@ -195,29 +262,37 @@ useEffect(() => {
       });
     };
     // Listen for friend request accepted events
-    const handleFriendAccepted = (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => {
-      setFriends(prev => {
-        // Check if friend is already in the list
-        if (!prev.some(f => f.friendId === friend.friendId)) {
-          // Only show toast if we didn't just accept this friend ourselves
-          // (to avoid duplicate toasts)
-          if (justAcceptedFriendIdRef.current !== friend.friendId) {
-            toast({
-              title: 'Friend Added',
-              description: `${friend.friendUserName} accepted your friend request`,
-              status: 'success',
-              duration: 3000,
-              isClosable: true,
-            });
-          }
-          return [...prev, { 
-            friendId: friend.friendId, 
-            friendUserName: friend.friendUserName,
-            friendStatus: (friend.friendStatus as UserStatus) || 'Online'
-          }];
+    const handleFriendAccepted = async (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => {
+      // Reload friends list to ensure both users see the friend
+      // This handles cross-town scenarios where friend data might not be complete
+      try {
+        const friendsData = await townController.getFriends();
+        setFriends(friendsData);
+        
+        // Only show toast if we didn't just accept this friend ourselves
+        if (justAcceptedFriendIdRef.current !== friend.friendId) {
+          toast({
+            title: 'Friend Added',
+            description: `${friend.friendUserName} accepted your friend request`,
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          });
         }
-        return prev;
-      });
+      } catch (err) {
+        console.error('Error reloading friends after acceptance:', err);
+        // Fallback to adding friend manually if reload fails
+        setFriends(prev => {
+          if (!prev.some(f => f.friendId === friend.friendId)) {
+            return [...prev, { 
+              friendId: friend.friendId, 
+              friendUserName: friend.friendUserName,
+              friendStatus: (friend.friendStatus as UserStatus) || 'Online'
+            }];
+          }
+          return prev;
+        });
+      }
     };
 
     // Listen for user status updates from friends
@@ -253,6 +328,54 @@ useEffect(() => {
       townController.off('userStatusUpdated', handleStatusUpdate);
     };
   }, [townController, username]);
+
+  // Handle town switching for cross-town teleport
+  useEffect(() => {
+    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string }>) => {
+      const { townID, townName } = event.detail;
+      try {
+        toast({
+          title: 'Teleport Accepted',
+          description: `Switching to ${townName || townID}...`,
+          status: 'success',
+          duration: 3000,
+        });
+        
+        const { setTownController } = loginController;
+        const { connect: videoConnect } = useVideoContext();
+        
+        // Disconnect current town
+        townController.disconnect();
+        
+        // Create new town controller and connect
+        const TownController = (await import('../../classes/TownController')).default;
+        const newController = new TownController({
+          userName: username,
+          townID: townID,
+          loginController,
+        });
+        
+        await newController.connect();
+        const videoToken = newController.providerVideoToken;
+        if (videoToken) {
+          await videoConnect(videoToken);
+        }
+        setTownController(newController);
+      } catch (err) {
+        toast({
+          title: 'Failed to Switch Towns',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          status: 'error',
+          duration: 3000,
+        });
+      }
+    };
+
+    window.addEventListener('switchTown', handleSwitchTown as EventListener);
+    return () => {
+      window.removeEventListener('switchTown', handleSwitchTown as EventListener);
+    };
+  }, [townController, loginController, username, toast]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
@@ -317,6 +440,56 @@ const handleDeclineTeleport = async () => {
   }
 };
 
+const handleAcceptCrossTownTeleport = async () => {
+  if (!incomingCrossTownTeleport) return;
+
+  try {
+    await townController.respondCrossTownTeleport(incomingCrossTownTeleport.fromUserId, true);
+
+    toast({
+      title: 'Teleport Accepted',
+      description: `${incomingCrossTownTeleport.fromUserName} will join your town...`,
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+
+    setIncomingCrossTownTeleport(null);
+    crossTownTeleportModal.onClose();
+  } catch (err: any) {
+    toast({
+      title: 'Teleport Failed',
+      description: err?.message ?? 'Unknown error',
+      status: 'error',
+    });
+  }
+};
+
+const handleDeclineCrossTownTeleport = async () => {
+  if (!incomingCrossTownTeleport) return;
+
+  try {
+    await townController.respondCrossTownTeleport(incomingCrossTownTeleport.fromUserId, false);
+
+    toast({
+      title: 'Teleport Declined',
+      description: `You declined ${incomingCrossTownTeleport.fromUserName}'s request.`,
+      status: 'info',
+      duration: 3000,
+      isClosable: true,
+    });
+
+    setIncomingCrossTownTeleport(null);
+    crossTownTeleportModal.onClose();
+  } catch (err: any) {
+    toast({
+      title: 'Error Declining Teleport',
+      description: err?.message ?? 'Unknown error',
+      status: 'error',
+    });
+  }
+};
+
   const handleDeclineRequest = async (requestId: string) => {
     try {
       await townController.declineFriendRequest(requestId);
@@ -360,7 +533,47 @@ const handleDeclineTeleport = async () => {
     }
   };
 
-  // Get available users to add as friends (exclude current user and existing friends)
+  // Search for players across all towns when search query changes
+  useEffect(() => {
+    const searchPlayers = async () => {
+      if (!addFriendSearchQuery || addFriendSearchQuery.trim().length === 0) {
+        setSearchResults([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const results = await townController.searchPlayers(addFriendSearchQuery.trim());
+        // Filter out current user, existing friends, and pending requests
+        const filtered = results.filter(result => {
+          if (result.playerId === townController.userID) {
+            return false;
+          }
+          if (friends.some(friend => friend.friendId === result.playerId)) {
+            return false;
+          }
+          if (friendRequests.some(request => 
+            request.fromUserId === result.playerId || request.toUserId === result.playerId
+          )) {
+            return false;
+          }
+          return true;
+        });
+        setSearchResults(filtered);
+      } catch (err) {
+        console.error('Error searching players:', err);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    // Debounce search
+    const timeoutId = setTimeout(searchPlayers, 300);
+    return () => clearTimeout(timeoutId);
+  }, [addFriendSearchQuery, townController, friends, friendRequests]);
+
+  // Get available users from current town (for when search is empty)
   const availableUsers = players.filter(player => {
     // Exclude current user
     if (player.id === townController.userID) {
@@ -379,10 +592,15 @@ const handleDeclineTeleport = async () => {
     return true;
   });
 
-  // Filter available users by search query
-  const filteredAvailableUsers = availableUsers.filter(player =>
-    player.userName.toLowerCase().includes(addFriendSearchQuery.toLowerCase())
-  );
+  // Use search results if available, otherwise use local players
+  const filteredAvailableUsers = addFriendSearchQuery.trim().length > 0
+    ? searchResults.map(result => ({
+        id: result.playerId,
+        userName: result.userName,
+        townID: result.townID,
+        townName: result.townName,
+      }))
+    : availableUsers;
 
   const handleSendFriendRequestFromModal = async (toUserId: string, toUserName: string) => {
     if (toUserId === townController.userID) {
@@ -672,6 +890,11 @@ const handleDeclineTeleport = async () => {
                           {friend.friendStatus || 'Offline'}
                         </Text>
                         </HStack>
+                        {friend.friendTownName && (
+                          <Text fontSize="xs" color="gray.400" mt={1}>
+                            {friend.friendTownID === townId ? 'Same Town' : `Town: ${friend.friendTownName}`}
+                          </Text>
+                        )}
                       </Box>
                       <IconButton
                         icon={<ArrowRightIcon />}   
@@ -679,9 +902,13 @@ const handleDeclineTeleport = async () => {
                         colorScheme="blue"
                         variant="outline"
                         aria-label={`Teleport to ${friend.friendUserName}`}
-                        onClick={() => handleSendTeleportRequest(friend.friendId)}
+                        onClick={() => handleSendTeleportRequest(friend)}
                         isDisabled={friend.friendStatus !== 'Online'}
-                        title={friend.friendStatus !== 'Online' ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` : `Teleport to ${friend.friendUserName}`}
+                        title={friend.friendStatus !== 'Online' 
+                          ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` 
+                          : friend.friendTownID === townId 
+                            ? `Teleport to ${friend.friendUserName} (same town)`
+                            : `Teleport to ${friend.friendUserName} (cross-town)`}
                       />
                       <IconButton
                         icon={<DeleteIcon />}
@@ -750,6 +977,11 @@ const handleDeclineTeleport = async () => {
                         <Avatar size="sm" name={player.userName} mr={3} />
                         <Box flex={1}>
                           <Text fontWeight="medium">{player.userName}</Text>
+                          {(player as any).townName && (
+                            <Text fontSize="xs" color="gray.400" mt={1}>
+                              {(player as any).townID === townId ? 'Same Town' : `Town: ${(player as any).townName}`}
+                            </Text>
+                          )}
                         </Box>
                         <IconButton
                           icon={<AddIcon />}
@@ -765,10 +997,12 @@ const handleDeclineTeleport = async () => {
                 </VStack>
               ) : (
                 <Text color="gray.500" textAlign="center" py={4}>
-                  {addFriendSearchQuery 
+                  {isSearching 
+                    ? 'Searching...'
+                    : addFriendSearchQuery 
                     ? 'No users found' 
                     : availableUsers.length === 0
-                    ? 'No available users to add'
+                    ? 'No available users to add. Try searching for players in other towns!'
                     : 'No users match your search'}
                 </Text>
               )}
@@ -781,6 +1015,36 @@ const handleDeclineTeleport = async () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      {/* CROSS-TOWN TELEPORT REQUEST MODAL */}
+      <Modal isOpen={crossTownTeleportModal.isOpen} onClose={crossTownTeleportModal.onClose} isCentered>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>Cross-Town Teleport Request</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            {incomingCrossTownTeleport && (
+              <VStack spacing={4} align="stretch">
+                <Text>
+                  <strong>{incomingCrossTownTeleport.fromUserName}</strong> from{' '}
+                  <strong>{incomingCrossTownTeleport.fromTownName}</strong> wants to teleport to your town.
+                </Text>
+                <Text fontSize="sm" color="gray.500">
+                  If you accept, they will join your current town.
+                </Text>
+              </VStack>
+            )}
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="red" variant="ghost" mr={3} onClick={handleDeclineCrossTownTeleport}>
+              Decline
+            </Button>
+            <Button colorScheme="green" onClick={handleAcceptCrossTownTeleport}>
+              Accept
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
       {/* TELEPORT REQUEST MODAL */}
   <Modal isOpen={teleportModal.isOpen} onClose={teleportModal.onClose} isCentered>
   <ModalOverlay />
