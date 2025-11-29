@@ -261,6 +261,14 @@ export interface ServerToClientEvents {
   chatMessage: (message: ChatMessage) => void;
   interactableUpdate: (interactable: Interactable) => void;
   commandResponse: (response: InteractableCommandResponse) => void;
+  friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
+  friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
+  friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
+  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
+  teleportRequestReceived: (data: { fromUserId: string;fromUserName: string;}) => void;
+  teleportResult: (data: {success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
+  crossTownTeleportRequestReceived: (data: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
+  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string }) => void;
 }
 
 export interface ClientToServerEvents {
@@ -268,4 +276,8 @@ export interface ClientToServerEvents {
   playerMovement: (movementData: PlayerLocation) => void;
   interactableUpdate: (update: Interactable) => void;
   interactableCommand: (command: InteractableCommand & InteractableCommandBase) => void;
+  teleportRequest: (data: { toUserId: string }) => void;
+  teleportResponse: (data: { fromUserId: string; accepted: boolean }) => void;
+  crossTownTeleportRequest: (data: { toUserId: string }) => void;
+  crossTownTeleportResponse: (data: { fromUserId: string; accepted: boolean }) => void;
 }

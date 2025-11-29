@@ -5,6 +5,8 @@ import InvalidParametersError from '../lib/InvalidParametersError';
 import IVideoClient from '../lib/IVideoClient';
 import Player from '../lib/Player';
 import TwilioVideo from '../lib/TwilioVideo';
+import FriendsStore from '../lib/FriendsStore';
+import CoveyTownsStore from '../lib/TownsStore';
 import { isViewingArea } from '../TestUtils';
 import {
   ChatMessage,
@@ -93,6 +95,8 @@ export default class Town {
 
   private _connectedSockets: Set<CoveyTownSocket> = new Set();
 
+  private _playerSockets: Map<string, CoveyTownSocket> = new Map();
+
   private _chatMessages: ChatMessage[] = [];
 
   constructor(
@@ -120,6 +124,7 @@ export default class Town {
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
+    this._playerSockets.set(newPlayer.id, socket);
 
     // Create a video token for this user to join this town
     newPlayer.videoToken = await this._videoClient.getTokenForTown(this._townID, newPlayer.id);
@@ -214,6 +219,384 @@ export default class Town {
         });
       }
     });
+
+    // Set up a listener for teleport requests
+    socket.on('teleportRequest', (data: { toUserId: string }) => {
+      try {
+        // Prevent teleporting to yourself
+        if (newPlayer.id === data.toUserId) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Cannot teleport to yourself',
+          });
+          return;
+        }
+
+        const targetPlayer = this._players.find(p => p.id === data.toUserId);
+        if (!targetPlayer) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player not found',
+          });
+          return;
+        }
+
+        // Check if players are friends (required for teleportation)
+        // Check both directions to ensure friendship is bidirectional
+        const friendsStore = FriendsStore.getInstance();
+        const areFriends = friendsStore.areFriends(newPlayer.id, targetPlayer.id) || 
+                          friendsStore.areFriends(targetPlayer.id, newPlayer.id);
+        if (!areFriends) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'You can only teleport to friends',
+          });
+          return;
+        }
+
+        // Check if target player is online (required for teleportation)
+        const targetStatus = friendsStore.getUserStatus(data.toUserId);
+        if (targetStatus !== 'Online') {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: `Cannot teleport to ${targetPlayer.userName}. They are currently ${targetStatus.toLowerCase()}.`,
+          });
+          return;
+        }
+
+        // Notify the target player about the teleport request
+        const targetSocket = this._playerSockets.get(data.toUserId);
+        if (!targetSocket) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player is not connected',
+          });
+          return;
+        }
+
+        // Verify the target socket is still connected and in the same town
+        if (!targetSocket.connected) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player disconnected',
+          });
+          return;
+        }
+
+        // Emit the teleport request to the target player
+        targetSocket.emit('teleportRequestReceived', {
+          fromUserId: newPlayer.id,
+          fromUserName: newPlayer.userName,
+        });
+        
+        // Also send a success result to the requesting player (request was sent)
+        socket.emit('teleportResult', {
+          success: true,
+          accepted: undefined, // Not yet accepted/declined
+          reason: 'Teleport request sent',
+        });
+      } catch (err) {
+        logError(err);
+        socket.emit('teleportResult', {
+          success: false,
+          accepted: false,
+          reason: 'Error processing teleport request',
+        });
+      }
+    });
+
+    // Set up a listener for teleport responses
+    socket.on('teleportResponse', (data: { fromUserId: string; accepted: boolean }) => {
+      try {
+        const requestingPlayer = this._players.find(p => p.id === data.fromUserId);
+        if (!requestingPlayer) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player not found',
+          });
+          return;
+        }
+
+        if (!data.accepted) {
+          // Notify the requesting player that the request was declined
+          const requestingSocket = this._playerSockets.get(data.fromUserId);
+          if (requestingSocket) {
+            requestingSocket.emit('teleportResult', {
+              success: false,
+              accepted: false,
+              reason: 'Teleport request was declined',
+              fromUserId: newPlayer.id,
+              fromUserName: newPlayer.userName,
+            });
+          }
+          return;
+        }
+
+        // Teleport the requesting player next to the accepting player
+        // Place them adjacent to the target player based on their rotation
+        // IMPORTANT: Offset must be less than 80 pixels to trigger video/voice proximity system
+        const targetLocation = newPlayer.location;
+        // Use an offset of 60 pixels (within the 80 pixel proximity threshold for video/voice)
+        // This ensures players are close enough to see/hear each other after teleportation
+        const offset = 60;
+        let teleportX = targetLocation.x;
+        let teleportY = targetLocation.y;
+
+        // Calculate position based on target's rotation
+        // In Phaser/top-down games, 'front' typically means facing down (positive Y)
+        switch (targetLocation.rotation) {
+          case 'front':
+            teleportY = targetLocation.y + offset; // In front (below the target)
+            break;
+          case 'back':
+            teleportY = targetLocation.y - offset; // Behind (above the target)
+            break;
+          case 'left':
+            teleportX = targetLocation.x - offset; // To the left of the target
+            break;
+          case 'right':
+            teleportX = targetLocation.x + offset; // To the right of the target
+            break;
+          default:
+            // Default: place to the right and slightly down (diagonal)
+            teleportX = targetLocation.x + offset;
+            teleportY = targetLocation.y + (offset / 2);
+            break;
+        }
+
+        // Create a new location object to ensure we're not modifying the target's location
+        const teleportLocation: PlayerLocation = {
+          x: teleportX,
+          y: teleportY,
+          rotation: targetLocation.rotation,
+          moving: false,
+          interactableID: targetLocation.interactableID,
+        };
+
+        // Log for debugging (can be removed later)
+        console.log(`Teleporting player ${requestingPlayer.userName} (${requestingPlayer.id}) from (${requestingPlayer.location.x}, ${requestingPlayer.location.y}) to (${teleportX}, ${teleportY}) next to ${newPlayer.userName} (${newPlayer.id}) at (${targetLocation.x}, ${targetLocation.y})`);
+
+        // Update the requesting player's location
+        // This will automatically broadcast the playerMoved event to all clients via _broadcastEmitter
+        this._updatePlayerLocation(requestingPlayer, teleportLocation);
+
+        // Notify both players of successful teleport
+        // Include the new location in the result so the frontend can force update the teleported player's position
+        const requestingSocket = this._playerSockets.get(data.fromUserId);
+        if (requestingSocket) {
+          requestingSocket.emit('teleportResult', {
+            success: true,
+            accepted: true,
+            fromUserId: newPlayer.id,
+            fromUserName: newPlayer.userName,
+            newLocation: teleportLocation, // Include the new location for the teleported player
+          });
+        }
+
+        socket.emit('teleportResult', {
+          success: true,
+          accepted: true,
+          fromUserId: requestingPlayer.id,
+          fromUserName: requestingPlayer.userName,
+        });
+      } catch (err) {
+        logError(err);
+        socket.emit('teleportResult', {
+          success: false,
+          accepted: false,
+          reason: 'Error processing teleport response',
+        });
+      }
+    });
+
+    // Set up a listener for cross-town teleport requests
+    socket.on('crossTownTeleportRequest', (data: { toUserId: string }) => {
+      try {
+        // Prevent teleporting to yourself
+        if (newPlayer.id === data.toUserId) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Cannot teleport to yourself',
+          });
+          return;
+        }
+
+        // Check if players are friends
+        const friendsStore = FriendsStore.getInstance();
+        const areFriends = friendsStore.areFriends(newPlayer.id, data.toUserId) ||
+                          friendsStore.areFriends(data.toUserId, newPlayer.id);
+        if (!areFriends) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'You can only teleport to friends',
+          });
+          return;
+        }
+
+        // Check target player status
+        const targetStatus = friendsStore.getUserStatus(data.toUserId);
+        if (targetStatus !== 'Online') {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: `Cannot teleport. Target player is currently ${targetStatus}.`,
+          });
+          return;
+        }
+
+        // Get target player's town
+        const townsStore = CoveyTownsStore.getInstance();
+        const targetTownID = townsStore.getPlayerTown(data.toUserId);
+        if (!targetTownID) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player is not in any town',
+          });
+          return;
+        }
+
+        // Check if target is in the same town (should use regular teleport instead)
+        if (targetTownID === this._townID) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player is in the same town. Use regular teleport instead.',
+          });
+          return;
+        }
+
+        const targetTown = townsStore.getTownByID(targetTownID);
+        if (!targetTown) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player\'s town not found',
+          });
+          return;
+        }
+
+        // Find target player in their town
+        const targetPlayer = targetTown.players.find(p => p.id === data.toUserId);
+        if (!targetPlayer) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player not found in their town',
+          });
+          return;
+        }
+
+        // Get target player's socket
+        const targetSocket = targetTown.getPlayerSocket(data.toUserId);
+        if (!targetSocket || !targetSocket.connected) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player is not connected',
+          });
+          return;
+        }
+
+        // Send request to target player
+        targetSocket.emit('crossTownTeleportRequestReceived', {
+          fromUserId: newPlayer.id,
+          fromUserName: newPlayer.userName,
+          fromTownID: this._townID,
+          fromTownName: this._friendlyName,
+        });
+
+        socket.emit('crossTownTeleportResult', {
+          success: true,
+          accepted: undefined,
+          reason: 'Cross-town teleport request sent',
+        });
+      } catch (err) {
+        logError(err);
+        socket.emit('crossTownTeleportResult', {
+          success: false,
+          accepted: false,
+          reason: 'Error processing cross-town teleport request',
+        });
+      }
+    });
+
+    // Set up a listener for cross-town teleport responses
+    socket.on('crossTownTeleportResponse', (data: { fromUserId: string; accepted: boolean }) => {
+      try {
+        const requestingPlayer = this._players.find(p => p.id === data.fromUserId);
+        if (!requestingPlayer) {
+          socket.emit('crossTownTeleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player not found',
+          });
+          return;
+        }
+
+        if (!data.accepted) {
+          // Notify the requesting player that the request was declined
+          const townsStore = CoveyTownsStore.getInstance();
+          const requestingTownID = townsStore.getPlayerTown(data.fromUserId);
+          if (requestingTownID) {
+            const requestingTown = townsStore.getTownByID(requestingTownID);
+            if (requestingTown) {
+              const requestingSocket = requestingTown.getPlayerSocket(data.fromUserId);
+              if (requestingSocket) {
+                requestingSocket.emit('crossTownTeleportResult', {
+                  success: false,
+                  accepted: false,
+                  reason: 'Cross-town teleport request was declined',
+                });
+              }
+            }
+          }
+          return;
+        }
+
+        // Accepted - notify the requesting player to join this town
+        const townsStore = CoveyTownsStore.getInstance();
+        const requestingTownID = townsStore.getPlayerTown(data.fromUserId);
+        if (requestingTownID) {
+          const requestingTown = townsStore.getTownByID(requestingTownID);
+          if (requestingTown) {
+            const requestingSocket = requestingTown.getPlayerSocket(data.fromUserId);
+            if (requestingSocket) {
+              requestingSocket.emit('crossTownTeleportResult', {
+                success: true,
+                accepted: true,
+                targetTownID: this._townID,
+                targetTownName: this._friendlyName,
+              });
+            }
+          }
+        }
+
+        socket.emit('crossTownTeleportResult', {
+          success: true,
+          accepted: true,
+          targetTownID: this._townID,
+          targetTownName: this._friendlyName,
+        });
+      } catch (err) {
+        logError(err);
+        socket.emit('crossTownTeleportResult', {
+          success: false,
+          accepted: false,
+          reason: 'Error processing cross-town teleport response',
+        });
+      }
+    });
+
     return newPlayer;
   }
 
@@ -226,6 +609,30 @@ export default class Town {
     if (player.location.interactableID) {
       this._removePlayerFromInteractable(player);
     }
+
+    // Remove player town tracking
+    const townsStore = CoveyTownsStore.getInstance();
+    townsStore.removePlayerTown(player.id);
+
+    // Set status to Offline when player disconnects and notify friends
+    const friendsStore = FriendsStore.getInstance();
+    friendsStore.setUserStatus(player.id, 'Offline');
+
+    // Notify friends of status change
+    const friends = friendsStore.getFriends(player.id);
+    friends.forEach(friend => {
+      // Find friend across all towns (they might be in a different town)
+      const friendInfo = townsStore.findPlayerAcrossTowns(friend.friendId);
+      if (friendInfo) {
+        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
+          userId: player.id,
+          userName: player.userName,
+          status: 'Offline',
+        });
+      }
+    });
+
+    this._playerSockets.delete(player.id);
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
   }
@@ -349,6 +756,75 @@ export default class Town {
    */
   public getPlayerBySessionToken(token: string): Player | undefined {
     return this.players.find(eachPlayer => eachPlayer.sessionToken === token);
+  }
+
+  /**
+   * Get the socket for a player by their ID
+   * @param playerId The ID of the player
+   * @returns The socket for the player, or undefined if not found
+   */
+  public getPlayerSocket(playerId: string): CoveyTownSocket | undefined {
+    return this._playerSockets.get(playerId);
+  }
+
+  /**
+   * Emit a friend request to a specific player
+   * @param playerId The ID of the player to notify
+   * @param request The friend request data
+   */
+  public emitFriendRequestToPlayer(
+    playerId: string,
+    request: { requestId: string; fromUserId: string; fromUserName: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('friendRequestReceived', request);
+    }
+  }
+
+  /**
+   * Emit a friend request accepted event to a specific player
+   * @param playerId The ID of the player to notify
+   * @param friend The friend data
+   */
+  public emitFriendRequestAccepted(
+    playerId: string,
+    friend: { friendId: string; friendUserName: string; friendStatus?: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('friendRequestAccepted', friend);
+    }
+  }
+
+  /**
+   * Emit a friend removed event to a specific player
+   * @param playerId The ID of the player to notify
+   * @param removedFriend The removed friend data
+   */
+  public emitFriendRemoved(
+    playerId: string,
+    removedFriend: { friendId: string; friendUserName: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('friendRemoved', removedFriend);
+    }
+  }
+
+  /**
+   * Emit a user status update to a specific player
+   * @param playerId The ID of the player to notify
+   * @param statusUpdate The status update data
+   */
+  public emitUserStatusUpdate(
+    playerId: string,
+    statusUpdate: { userId: string; userName: string; status: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('userStatusUpdated', statusUpdate);
+    }
   }
 
   /**
