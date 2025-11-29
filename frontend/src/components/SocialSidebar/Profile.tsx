@@ -274,7 +274,7 @@ useEffect(() => {
 
     toast({
       title: 'Teleport Accepted',
-      description: `Teleporting to ${incomingTeleport.fromUserName}...`,
+      description: `Teleporting ${incomingTeleport.fromUserName}...`,
       status: 'success',
       duration: 3000,
       isClosable: true,
