@@ -104,17 +104,8 @@ export default function Profile(): JSX.Element {
 
   const handleSendTeleportRequest = async (friend: Friend) => {
         try {
-          // Check cooldown
-          if (teleportCooldown > 0) {
-            toast({
-              title: 'Teleport on Cooldown',
-              description: `Please wait ${teleportCooldown} second${teleportCooldown !== 1 ? 's' : ''} before teleporting again.`,
-              status: 'warning',
-              duration: 3000,
-              isClosable: true,
-            });
-            return;
-          }
+          // Note: We don't block here - let the backend decide if cooldown is active
+          // The frontend timer is just for UI display. The backend is the source of truth.
 
           // Check friend status first
           if (friend.friendStatus !== 'Online') {
@@ -232,12 +223,15 @@ useEffect(() => {
   };
 
   const teleportResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: any; cooldownRemaining?: number }) => {
-    // Set cooldown if provided
-    if (data.cooldownRemaining !== undefined && data.cooldownRemaining > 0) {
+    // Always sync cooldown from backend response (backend is source of truth)
+    if (data.cooldownRemaining !== undefined) {
       setTeleportCooldown(data.cooldownRemaining);
     } else if (data.success && data.accepted) {
       // Teleport succeeded - set default cooldown to 10 seconds
       setTeleportCooldown(10);
+    } else if (data.success === false && data.cooldownRemaining === undefined) {
+      // If request failed and no cooldown specified, clear the cooldown (might be expired)
+      setTeleportCooldown(0);
     }
   };
 
@@ -968,7 +962,7 @@ const handleDeclineCrossTownTeleport = async () => {
                         variant="outline"
                         aria-label={`Teleport to ${friend.friendUserName}`}
                         onClick={() => handleSendTeleportRequest(friend)}
-                        isDisabled={friend.friendStatus !== 'Online' || teleportCooldown > 0}
+                        isDisabled={friend.friendStatus !== 'Online'}
                         title={
                           teleportCooldown > 0
                             ? `Teleport on cooldown (${teleportCooldown}s remaining)`

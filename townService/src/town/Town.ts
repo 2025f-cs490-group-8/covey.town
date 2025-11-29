@@ -255,6 +255,9 @@ export default class Town {
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
+          } else {
+            // Cooldown has expired, remove it from the map to clean up
+            this._teleportCooldowns.delete(newPlayer.id);
           }
         }
 
@@ -505,6 +508,9 @@ export default class Town {
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
+          } else {
+            // Cooldown has expired, remove it from the map to clean up
+            this._teleportCooldowns.delete(newPlayer.id);
           }
         }
 
