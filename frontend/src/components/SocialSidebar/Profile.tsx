@@ -38,6 +38,7 @@ import {
 import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
 import { usePlayers } from '../../classes/TownController';
+import { ArrowRightIcon } from '@chakra-ui/icons';
 
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
@@ -58,16 +59,18 @@ interface FriendRequest {
 }
 
 export default function Profile(): JSX.Element {
+  const teleportModal = useDisclosure();
   const townController = useTownController();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const players = usePlayers();
-
+  const [incomingTeleport, setIncomingTeleport] = useState<{fromUserId: string; fromUserName: string} | null>(null);
   const username = townController.userName;
   const townId = townController.townID;
   const friendlyName = townController.friendlyName;
+
   
   // Scroll to top when component mounts
   useEffect(() => {
@@ -88,6 +91,58 @@ export default function Profile(): JSX.Element {
   const [sendingRequestTo, setSendingRequestTo] = useState<string | null>(null);
   const justAcceptedFriendIdRef = useRef<string | null>(null);
 
+  const handleSendTeleportRequest = async (targetPlayerId: string) => {
+        try {
+          await townController.sendTeleportRequest(targetPlayerId);
+
+          toast({
+            title: 'Teleport request sent',
+            description: 'Waiting for the other player to accept…',
+            status: 'success',
+            duration: 3000,
+            isClosable: true,
+          });
+        } catch (err: any) {
+          toast({
+            title: 'Teleport failed',
+            description: err?.message ?? 'Unknown error',
+            status: 'error',
+            duration: 3000,
+            isClosable: true,
+          });
+        }
+  };
+  const handleAcceptRequest = async (requestId: string) => {
+  try {
+    justAcceptedFriendIdRef.current = requestId;
+    await townController.acceptFriendRequest(requestId);
+
+    setFriendRequests(prev =>
+      prev.filter(req => req.requestId !== requestId),
+    );
+  
+
+  } catch (err: any) {
+    toast({
+      title: 'Error',
+      description: err.message ?? 'Failed to accept request',
+      status: 'error',
+      duration: 3000,
+      isClosable: true,
+    });
+  } finally {
+    justAcceptedFriendIdRef.current = null;
+  }
+};
+useEffect(() => {
+  const handler = (payload) => {
+    setIncomingTeleport(payload);
+    teleportModal.onOpen();
+  };
+
+  townController.addListener('teleportRequestReceived', handler);
+  return () => townController.removeListener('teleportRequestReceived', handler);
+}, [townController]);
   // Load friends and friend requests
   useEffect(() => {
     const loadData = async () => {
@@ -138,7 +193,6 @@ export default function Profile(): JSX.Element {
         isClosable: true,
       });
     };
-
     // Listen for friend request accepted events
     const handleFriendAccepted = (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => {
       setFriends(prev => {
@@ -212,47 +266,55 @@ export default function Profile(): JSX.Element {
     friend.friendUserName.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAcceptRequest = async (requestId: string) => {
-    try {
-      // Get the request info before accepting to show the correct toast
-      const request = friendRequests.find(req => req.requestId === requestId);
-      if (!request) {
-        throw new Error('Friend request not found');
-      }
-      
-      await townController.acceptFriendRequest(requestId);
-      setFriendRequests(prev => prev.filter(req => req.requestId !== requestId));
-      
-      // Track that we just accepted this friend to prevent duplicate toast
-      justAcceptedFriendIdRef.current = request.fromUserId;
-      
-      // Show toast for the accepter
-      toast({
-        title: 'Friend Added',
-        description: `You are now friends with ${request.fromUserName}`,
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      
-      // Clear the tracking after a short delay
-      setTimeout(() => {
-        justAcceptedFriendIdRef.current = null;
-      }, 1000);
-      
-      // Don't manually add friend here - let the socket event handle it
-      // This prevents duplicate friends from being added
-      // The socket event will trigger handleFriendAccepted which adds the friend
-    } catch (err) {
-      toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to accept friend request',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
+  const handleAcceptTeleport = async () => {
+  if (!incomingTeleport) return;
+
+  try {
+    await townController.respondTeleport(incomingTeleport.fromUserId, true);
+
+    toast({
+      title: 'Teleport Accepted',
+      description: `Teleporting ${incomingTeleport.fromUserName}...`,
+      status: 'success',
+      duration: 3000,
+      isClosable: true,
+    });
+
+    setIncomingTeleport(null);
+    teleportModal.onClose();
+  } catch (err: any) {
+    toast({
+      title: 'Teleport Failed',
+      description: err?.message ?? 'Unknown error',
+      status: 'error',
+    });
+  }
+};
+
+const handleDeclineTeleport = async () => {
+  if (!incomingTeleport) return;
+
+  try {
+    await townController.respondTeleport(incomingTeleport.fromUserId, false);
+
+    toast({
+      title: 'Teleport Declined',
+      description: `You declined ${incomingTeleport.fromUserName}'s request.`,
+      status: 'info',
+      duration: 3000,
+      isClosable: true,
+    });
+
+    setIncomingTeleport(null);
+    teleportModal.onClose();
+  } catch (err: any) {
+    toast({
+      title: 'Error Declining Teleport',
+      description: err?.message ?? 'Unknown error',
+      status: 'error',
+    });
+  }
+};
 
   const handleDeclineRequest = async (requestId: string) => {
     try {
@@ -360,6 +422,7 @@ export default function Profile(): JSX.Element {
   };
 
   return (
+    
   <Box
   maxW="5000px"
   mx="auto"
@@ -610,6 +673,14 @@ export default function Profile(): JSX.Element {
                         </HStack>
                       </Box>
                       <IconButton
+                        icon={<ArrowRightIcon />}   
+                        size="sm"
+                        colorScheme="blue"
+                        variant="outline"
+                        aria-label={`Teleport to ${friend.friendUserName}`}
+                        onClick={() => handleSendTeleportRequest(friend.friendId)}
+                      />
+                      <IconButton
                         icon={<DeleteIcon />}
                         size="sm"
                         colorScheme="red"
@@ -707,6 +778,31 @@ export default function Profile(): JSX.Element {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      {/* TELEPORT REQUEST MODAL */}
+  <Modal isOpen={teleportModal.isOpen} onClose={teleportModal.onClose} isCentered>
+  <ModalOverlay />
+  <ModalContent>
+    <ModalHeader>Teleport Request</ModalHeader>
+    <ModalCloseButton />
+
+    <ModalBody>
+      {incomingTeleport && (
+        <Text>
+          <b>{incomingTeleport.fromUserName}</b> wants you to teleport to them.
+        </Text>
+      )}
+    </ModalBody>
+
+    <ModalFooter>
+      <Button colorScheme="green" mr={3} onClick={handleAcceptTeleport}>
+        Accept
+      </Button>
+      <Button variant="outline" colorScheme="red" onClick={handleDeclineTeleport}>
+        Decline
+      </Button>
+    </ModalFooter>
+  </ModalContent>
+</Modal>
     </Box>
   );
 }
