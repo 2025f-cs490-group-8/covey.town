@@ -38,6 +38,260 @@ function App() {
           <VideoOverlay preferredMode='fullwidth' />
         </ChatProvider>
       </TownControllerContext.Provider>
+  e.preventDefault();
+
+  if (!username || !password) {
+    toast({
+      title: 'Error',
+      description: 'Please enter both username and password',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:8081/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Invalid username or password');
+    }
+
+    const data = await res.json();
+
+    // Save user session info
+    localStorage.setItem('authUser', JSON.stringify(data));
+
+    setIsAuthenticated(true);
+
+    toast({
+      title: 'Success',
+      description: `Welcome, ${data.name}!`,
+      status: 'success',
+      duration: 2000,
+    });
+  } catch (err) {
+    toast({
+      title: 'Login failed',
+      description: err.message,
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
+const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!username || !email || !password || !confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Please fill in all fields',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Passwords do not match',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:8081/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({ message: 'Registration failed' }));
+      throw new Error(errorData.message || `Registration failed: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+
+    toast({
+      title: 'Success',
+      description: data.message || 'Account created successfully! Please log in.',
+      status: 'success',
+      duration: 3000,
+    });
+
+    // Switch back to login view
+    setShowRegister(false);
+    setPassword('');
+    setConfirmPassword('');
+
+  } catch (err: any) {
+    toast({
+      title: 'Error creating account',
+      description: err.message || 'An unexpected error occurred',
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
+
+  if (!isAuthenticated) {
+    return (
+      <Box 
+        display="flex" 
+        alignItems="center" 
+        justifyContent="center" 
+        minH="100vh"
+        bgGradient="linear(to-br, blue.400, purple.600)"
+      >
+        <Box 
+          maxW="400px" 
+          w="full" 
+          p={8} 
+          borderRadius="2xl" 
+          boxShadow="2xl"
+          bg="white"
+        >
+    {!showRegister ? (
+  <form onSubmit={handleLogin} style={{ width: '100%' }}>
+    <VStack spacing={6}>
+      <Heading size="lg" color="gray.800">Login to Covey.Town</Heading>
+      
+      <FormControl isRequired>
+        <FormLabel>Username</FormLabel>
+        <Input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter username"
+        />
+      </FormControl>
+
+      <FormControl isRequired>
+        <FormLabel>Password</FormLabel>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter password"
+        />
+      </FormControl>
+
+      <Button type="submit" colorScheme="blue" width="100%">
+        Login
+      </Button>
+
+      {/* Always show Google login section - button will handle its own visibility */}
+      <HStack width="100%" spacing={2}>
+        <Divider />
+        <Text fontSize="sm" color="gray.500">OR</Text>
+        <Divider />
+      </HStack>
+
+      <GoogleLoginButton
+        onSuccess={(userInfo) => {
+          setIsAuthenticated(true);
+          // Store user info for later use (e.g., for town joining)
+          localStorage.setItem('googleUser', JSON.stringify(userInfo));
+          toast({
+            title: 'Success',
+            description: `Welcome, ${userInfo.name}!`,
+            status: 'success',
+            duration: 2000,
+          });
+        }}
+      />
+
+      <Text fontSize="sm" color="gray.600">
+        Don't have an account?{' '}
+        <Button
+          variant="link"
+          colorScheme="blue"
+          onClick={() => {
+            setShowRegister(true);
+            setUsername('');
+            setPassword('');
+          }}
+        >
+          Register here
+        </Button>
+      </Text>
+    </VStack>
+  </form>
+) : (
+            <form onSubmit={handleRegister}>
+              <VStack spacing="6">
+                <Heading size="lg" color="gray.800">Create Account</Heading>
+                
+                <FormControl isRequired>
+                  <FormLabel>Username</FormLabel>
+                  <Input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Choose a username"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Email</FormLabel>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Password</FormLabel>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a password"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                  />
+                </FormControl>
+
+                <Button type="submit" colorScheme="blue" width="100%">
+                  Register
+                </Button>
+
+                <Text fontSize="sm" color="gray.600">
+                  Already have an account?{' '}
+                  <Button
+                    variant="link"
+                    colorScheme="blue"
+                    onClick={() => {
+                      setShowRegister(false);
+                      setUsername('');
+                      setPassword('');
+                      setConfirmPassword('');
+                      setEmail('');
+                    }}
+                  >
+                    Login here
+                  </Button>
+                </Text>
+              </VStack>
+            </form>
     );
   } else {
     page = <PreJoinScreens />;

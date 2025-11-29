@@ -190,6 +190,316 @@ export class TownsController extends Controller {
   }
 
   /**
+   * @param townID ID of the town
+   * @param sessionToken session token of the player making the request
+   * @param requestBody The friend request details
+   */
+  @Post('{townID}/friendRequest')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async sendFriendRequest(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { toUserId: string },
+  ): Promise<{ requestId: string }> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const fromPlayer = town.getPlayerBySessionToken(sessionToken);
+    if (!fromPlayer) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Find the target player in the town
+    const toPlayer = town.players.find(p => p.id === requestBody.toUserId);
+    if (!toPlayer) {
+      throw new InvalidParametersError('Target user not found in town');
+    }
+
+    if (fromPlayer.id === toPlayer.id) {
+      throw new InvalidParametersError('Cannot send friend request to yourself');
+    }
+
+    try {
+      const request = this._friendsStore.sendFriendRequest(
+        fromPlayer.id,
+        fromPlayer.userName,
+        toPlayer.id,
+        toPlayer.userName,
+      );
+
+      // Notify the target player via socket if they're in the same town
+      town.emitFriendRequestToPlayer(toPlayer.id, {
+        requestId: request.id,
+        fromUserId: request.fromUserId,
+        fromUserName: request.fromUserName,
+      });
+
+      return { requestId: request.id };
+    } catch (error) {
+      throw new InvalidParametersError(
+        error instanceof Error ? error.message : 'Failed to send friend request',
+      );
+    }
+  }
+
+  /**
+   * Accept a friend request
+   * @param townID ID of the town
+   * @param sessionToken session token of the player accepting the request
+   * @param requestBody The friend request ID
+   */
+  @Post('{townID}/friendRequest/accept')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async acceptFriendRequest(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { requestId: string },
+  ): Promise<{ friendId: string; friendUserName: string }> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    try {
+      // Get the request before accepting to find the sender
+      const allRequests = this._friendsStore.getFriendRequests(player.id);
+      const request = allRequests.find(req => req.id === requestBody.requestId);
+
+      if (!request) {
+        throw new InvalidParametersError('Friend request not found');
+      }
+
+      const friend = this._friendsStore.acceptFriendRequest(requestBody.requestId, player.id);
+
+      // Get user statuses for both players
+      const senderStatus = this._friendsStore.getUserStatus(request.fromUserId);
+      const accepterStatus = this._friendsStore.getUserStatus(player.id);
+
+      // Notify the sender (fromUserId) that their request was accepted
+      const senderPlayer = town.players.find(p => p.id === request.fromUserId);
+      if (senderPlayer) {
+        town.emitFriendRequestAccepted(senderPlayer.id, {
+          friendId: player.id,
+          friendUserName: player.userName,
+          friendStatus: accepterStatus,
+        });
+      }
+
+      // Notify the accepter via socket as well (for consistency and real-time updates)
+      town.emitFriendRequestAccepted(player.id, {
+        friendId: request.fromUserId,
+        friendUserName: request.fromUserName,
+        friendStatus: senderStatus,
+      });
+
+      return { friendId: friend.friendId, friendUserName: friend.friendUserName };
+    } catch (error) {
+      throw new InvalidParametersError(
+        error instanceof Error ? error.message : 'Failed to accept friend request',
+      );
+    }
+  }
+
+  /**
+   * Decline a friend request
+   * @param townID ID of the town
+   * @param sessionToken session token of the player declining the request
+   * @param requestBody The friend request ID
+   */
+  @Post('{townID}/friendRequest/decline')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async declineFriendRequest(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { requestId: string },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    try {
+      this._friendsStore.declineFriendRequest(requestBody.requestId, player.id);
+    } catch (error) {
+      throw new InvalidParametersError(
+        error instanceof Error ? error.message : 'Failed to decline friend request',
+      );
+    }
+  }
+
+  /**
+   * Get friend list for the current user
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @returns list of friends with their statuses
+   */
+  @Get('{townID}/friends')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async getFriends(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string }>> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    const friends = this._friendsStore.getFriendsWithStatus(player.id);
+    return friends.map(f => ({
+      friendId: f.friendId,
+      friendUserName: f.friendUserName,
+      friendStatus: f.friendStatus,
+    }));
+  }
+
+  /**
+   * Update user status
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The new status
+   */
+  @Post('{townID}/status')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async updateUserStatus(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { status: 'Online' | 'Busy' | 'Offline' },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Validate status
+    if (!['Online', 'Busy', 'Offline'].includes(requestBody.status)) {
+      throw new InvalidParametersError('Invalid status value');
+    }
+
+    // Update status in store
+    this._friendsStore.setUserStatus(player.id, requestBody.status);
+
+    // Notify all friends of the status change
+    const friends = this._friendsStore.getFriends(player.id);
+    friends.forEach(friend => {
+      const friendPlayer = town.players.find(p => p.id === friend.friendId);
+      if (friendPlayer) {
+        town.emitUserStatusUpdate(friendPlayer.id, {
+          userId: player.id,
+          userName: player.userName,
+          status: requestBody.status,
+        });
+      }
+    });
+  }
+
+  /**
+   * Get pending friend requests for the current user
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @returns list of pending friend requests
+   */
+  @Get('{townID}/friendRequests')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async getFriendRequests(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+  ): Promise<
+    Array<{
+      requestId: string;
+      fromUserId: string;
+      fromUserName: string;
+      toUserId: string;
+      toUserName: string;
+      status: string;
+      createdAt: Date;
+    }>
+  > {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    const requests = this._friendsStore.getReceivedFriendRequests(player.id);
+    return requests.map(r => ({
+      requestId: r.id,
+      fromUserId: r.fromUserId,
+      fromUserName: r.fromUserName,
+      toUserId: r.toUserId,
+      toUserName: r.toUserName,
+      status: r.status,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /**
+   * Remove a friend from the current user's friend list
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The friend ID to remove
+   */
+  @Delete('{townID}/friends')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async removeFriend(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { friendId: string },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    // Check if they are friends
+    if (!this._friendsStore.areFriends(player.id, requestBody.friendId)) {
+      throw new InvalidParametersError('Users are not friends');
+    }
+
+    // Get friend info before removing
+    const friends = this._friendsStore.getFriends(player.id);
+    const friend = friends.find(f => f.friendId === requestBody.friendId);
+    if (!friend) {
+      throw new InvalidParametersError('Friend not found');
+    }
+
+    // Remove friend from both sides
+    this._friendsStore.removeFriend(player.id, requestBody.friendId);
+
+    // Notify the removed friend via socket if they're in the same town
+    const friendPlayer = town.players.find(p => p.id === requestBody.friendId);
+    if (friendPlayer) {
+      town.emitFriendRemoved(friendPlayer.id, {
+        friendId: player.id,
+        friendUserName: player.userName,
+      });
+    }
+  }
+
+  /**
    * Connects a client's socket to the requested town, or disconnects the socket if no such town exists
    *
    * @param socket A new socket connection, with the userName and townID parameters of the socket's

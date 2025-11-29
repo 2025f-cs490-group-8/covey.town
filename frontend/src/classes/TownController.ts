@@ -109,6 +109,9 @@ export type TownEvents = {
    * @param obj the interactable that is being interacted with
    */
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
+  
+  teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
+  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
 };
 
 /**
@@ -374,6 +377,27 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     /**
      * On chat messages, forward the messages to listeners who subscribe to the controller's events
      */
+    this._socket.on('teleportRequestReceived', data => {
+      this.emit('teleportRequestReceived', data);
+    });
+
+    /** TELEPORT: incoming response */
+    this._socket.on('teleportResult', data => {
+      // If teleport was successful and we have a new location, force update the local player's position
+      if (data.success && data.accepted && data.newLocation && this._ourPlayer) {
+        // Force update the local player's position for teleportation
+        // Temporarily disable location management by game scene to allow server update
+        if (this._ourPlayer.gameObjects) {
+          const wasManaged = this._ourPlayer.gameObjects.locationManagedByGameScene;
+          this._ourPlayer.gameObjects.locationManagedByGameScene = false;
+          this._ourPlayer.location = data.newLocation;
+          this._ourPlayer.gameObjects.locationManagedByGameScene = wasManaged;
+        } else {
+          this._ourPlayer.location = data.newLocation;
+        }
+      }
+      this.emit('teleportResult', data);
+    });
     this._socket.on('chatMessage', message => {
       this.emit('chatMessage', message);
     });

@@ -261,6 +261,8 @@ export interface ServerToClientEvents {
   chatMessage: (message: ChatMessage) => void;
   interactableUpdate: (interactable: Interactable) => void;
   commandResponse: (response: InteractableCommandResponse) => void;
+  teleportRequestReceived: (data: { fromUserId: string;fromUserName: string;}) => void;
+  teleportResult: (data: {success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
 }
 
 export interface ClientToServerEvents {
