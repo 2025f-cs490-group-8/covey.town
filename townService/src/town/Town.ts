@@ -100,6 +100,12 @@ export default class Town {
 
   private _chatMessages: ChatMessage[] = [];
 
+  // Map from player ID to their last teleport timestamp (for cooldown)
+  private _teleportCooldowns: Map<string, number> = new Map();
+
+  // Teleport cooldown duration in milliseconds (10 seconds)
+  private static readonly TELEPORT_COOLDOWN_MS = 10000;
+
   constructor(
     friendlyName: string,
     isPubliclyListed: boolean,
@@ -231,8 +237,25 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Cannot teleport to yourself',
+            cooldownRemaining: 0,
           });
           return;
+        }
+
+        // Check teleport cooldown
+        const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
+        if (lastTeleportTime) {
+          const timeSinceLastTeleport = Date.now() - lastTeleportTime;
+          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          if (cooldownRemaining > 0) {
+            socket.emit('teleportResult', {
+              success: false,
+              accepted: false,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
+            });
+            return;
+          }
         }
 
         const targetPlayer = this._players.find(p => p.id === data.toUserId);
@@ -241,6 +264,19 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player not found',
+            cooldownRemaining: 0,
+          });
+          return;
+        }
+
+        // Safety check: Verify target player is still in the town
+        const currentTargetPlayer = this._players.find(p => p.id === data.toUserId);
+        if (!currentTargetPlayer || currentTargetPlayer.id !== targetPlayer.id) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Target player is no longer in this town',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -255,6 +291,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'You can only teleport to friends',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -266,6 +303,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: `Cannot teleport to ${targetPlayer.userName}. They are currently ${targetStatus.toLowerCase()}.`,
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -277,16 +315,18 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player is not connected',
+            cooldownRemaining: 0,
           });
           return;
         }
 
-        // Verify the target socket is still connected and in the same town
+        // Safety check: Verify the target socket is still connected and in the same town
         if (!targetSocket.connected) {
           socket.emit('teleportResult', {
             success: false,
             accepted: false,
             reason: 'Target player disconnected',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -302,6 +342,7 @@ export default class Town {
           success: true,
           accepted: undefined, // Not yet accepted/declined
           reason: 'Teleport request sent',
+          cooldownRemaining: 0,
         });
       } catch (err) {
         logError(err);
@@ -309,6 +350,7 @@ export default class Town {
           success: false,
           accepted: false,
           reason: 'Error processing teleport request',
+          cooldownRemaining: 0,
         });
       }
     });
@@ -336,8 +378,21 @@ export default class Town {
               reason: 'Teleport request was declined',
               fromUserId: newPlayer.id,
               fromUserName: newPlayer.userName,
+              cooldownRemaining: 0,
             });
           }
+          return;
+        }
+
+        // Safety check: Verify requesting player is still in the town
+        const currentRequestingPlayer = this._players.find(p => p.id === data.fromUserId);
+        if (!currentRequestingPlayer || currentRequestingPlayer.id !== requestingPlayer.id) {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: 'Requesting player is no longer in this town',
+            cooldownRemaining: 0,
+          });
           return;
         }
 
@@ -389,6 +444,9 @@ export default class Town {
         // This will automatically broadcast the playerMoved event to all clients via _broadcastEmitter
         this._updatePlayerLocation(requestingPlayer, teleportLocation);
 
+        // Set cooldown for the requesting player
+        this._teleportCooldowns.set(requestingPlayer.id, Date.now());
+
         // Notify both players of successful teleport
         // Include the new location in the result so the frontend can force update the teleported player's position
         const requestingSocket = this._playerSockets.get(data.fromUserId);
@@ -399,6 +457,7 @@ export default class Town {
             fromUserId: newPlayer.id,
             fromUserName: newPlayer.userName,
             newLocation: teleportLocation, // Include the new location for the teleported player
+            cooldownRemaining: 0,
           });
         }
 
@@ -407,6 +466,7 @@ export default class Town {
           accepted: true,
           fromUserId: requestingPlayer.id,
           fromUserName: requestingPlayer.userName,
+          cooldownRemaining: 0,
         });
       } catch (err) {
         logError(err);
@@ -427,8 +487,25 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Cannot teleport to yourself',
+            cooldownRemaining: 0,
           });
           return;
+        }
+
+        // Check teleport cooldown
+        const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
+        if (lastTeleportTime) {
+          const timeSinceLastTeleport = Date.now() - lastTeleportTime;
+          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          if (cooldownRemaining > 0) {
+            socket.emit('crossTownTeleportResult', {
+              success: false,
+              accepted: false,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
+            });
+            return;
+          }
         }
 
         // Check if players are friends
@@ -440,6 +517,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'You can only teleport to friends',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -451,6 +529,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: `Cannot teleport. Target player is currently ${targetStatus}.`,
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -463,6 +542,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player is not in any town',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -473,6 +553,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player is in the same town. Use regular teleport instead.',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -483,17 +564,19 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player\'s town not found',
+            cooldownRemaining: 0,
           });
           return;
         }
 
-        // Find target player in their town
+        // Safety check: Find target player in their town
         const targetPlayer = targetTown.players.find(p => p.id === data.toUserId);
         if (!targetPlayer) {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
             reason: 'Target player not found in their town',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -505,6 +588,7 @@ export default class Town {
             success: false,
             accepted: false,
             reason: 'Target player is not connected',
+            cooldownRemaining: 0,
           });
           return;
         }
@@ -521,6 +605,7 @@ export default class Town {
           success: true,
           accepted: undefined,
           reason: 'Cross-town teleport request sent',
+          cooldownRemaining: 0,
         });
       } catch (err) {
         logError(err);
@@ -528,6 +613,7 @@ export default class Town {
           success: false,
           accepted: false,
           reason: 'Error processing cross-town teleport request',
+          cooldownRemaining: 0,
         });
       }
     });
@@ -551,6 +637,7 @@ export default class Town {
                   success: false,
                   accepted: false,
                   reason: 'Cross-town teleport request was declined',
+                  cooldownRemaining: 0,
                 });
               }
             }
@@ -558,14 +645,24 @@ export default class Town {
           return;
         }
 
-        // Accepted - notify the requesting player to join this town
+        // Accepted - set cooldown for the requesting player (they will teleport to this town)
         const townsStore = CoveyTownsStore.getInstance();
         const requestingTownID = townsStore.getPlayerTown(data.fromUserId);
+        if (requestingTownID) {
+          const requestingTown = townsStore.getTownByID(requestingTownID);
+          if (requestingTown) {
+            // Set cooldown in the requesting player's town
+            (requestingTown as any)._teleportCooldowns?.set(data.fromUserId, Date.now());
+          }
+        }
+
+        // Accepted - notify the requesting player to join this town
         if (!requestingTownID) {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
             reason: 'Requesting player is not in any town',
+            cooldownRemaining: 0,
           });
           return;
         }

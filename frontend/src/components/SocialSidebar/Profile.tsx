@@ -100,9 +100,22 @@ export default function Profile(): JSX.Element {
   const justAcceptedFriendIdRef = useRef<string | null>(null);
   const [searchResults, setSearchResults] = useState<Array<{ playerId: string; userName: string; townID: string; townName: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [teleportCooldown, setTeleportCooldown] = useState<number>(0);
 
   const handleSendTeleportRequest = async (friend: Friend) => {
         try {
+          // Check cooldown
+          if (teleportCooldown > 0) {
+            toast({
+              title: 'Teleport on Cooldown',
+              description: `Please wait ${teleportCooldown} second${teleportCooldown !== 1 ? 's' : ''} before teleporting again.`,
+              status: 'warning',
+              duration: 3000,
+              isClosable: true,
+            });
+            return;
+          }
+
           // Check friend status first
           if (friend.friendStatus !== 'Online') {
             toast({
@@ -184,8 +197,15 @@ useEffect(() => {
     crossTownTeleportModal.onOpen();
   };
 
-  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string }) => {
+  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number }) => {
     if (data.success && data.accepted && data.targetTownID) {
+      // Set cooldown if provided
+      if (data.cooldownRemaining !== undefined) {
+        setTeleportCooldown(data.cooldownRemaining);
+      } else {
+        // Default to 10 seconds when teleport succeeds
+        setTeleportCooldown(10);
+      }
       // Dispatch custom event for town switching - will be handled by separate useEffect
       window.dispatchEvent(new CustomEvent('switchTown', { 
         detail: { 
@@ -198,6 +218,10 @@ useEffect(() => {
       // Don't show any message - the initial "request sent" toast is already shown
       return;
     } else if (!data.success || data.accepted === false) {
+      // Set cooldown if provided in error response
+      if (data.cooldownRemaining !== undefined && data.cooldownRemaining > 0) {
+        setTeleportCooldown(data.cooldownRemaining);
+      }
       toast({
         title: 'Teleport Failed',
         description: data.reason || 'Teleport request was declined',
@@ -207,13 +231,25 @@ useEffect(() => {
     }
   };
 
+  const teleportResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: any; cooldownRemaining?: number }) => {
+    // Set cooldown if provided
+    if (data.cooldownRemaining !== undefined && data.cooldownRemaining > 0) {
+      setTeleportCooldown(data.cooldownRemaining);
+    } else if (data.success && data.accepted) {
+      // Teleport succeeded - set default cooldown to 10 seconds
+      setTeleportCooldown(10);
+    }
+  };
+
   townController.addListener('teleportRequestReceived', handler);
   townController.addListener('crossTownTeleportRequestReceived', crossTownHandler);
   townController.addListener('crossTownTeleportResult', crossTownResultHandler);
+  townController.addListener('teleportResult', teleportResultHandler);
   return () => {
     townController.removeListener('teleportRequestReceived', handler);
     townController.removeListener('crossTownTeleportRequestReceived', crossTownHandler);
     townController.removeListener('crossTownTeleportResult', crossTownResultHandler);
+    townController.removeListener('teleportResult', teleportResultHandler);
   };
 }, [townController]);
 
@@ -748,6 +784,30 @@ const handleDeclineCrossTownTeleport = async () => {
           </VStack>
         </HStack>
 
+        {/* Teleport Cooldown Timer */}
+        {teleportCooldown > 0 && (
+          <Box
+            p={3}
+            bg="orange.50"
+            borderWidth="1px"
+            borderColor="orange.200"
+            borderRadius="md"
+            mb={4}
+          >
+            <HStack spacing={2}>
+              <Text fontWeight="bold" color="orange.700">
+                ⏱️ Teleport Cooldown:
+              </Text>
+              <Text fontSize="xl" fontWeight="bold" color="orange.600">
+                {teleportCooldown}s
+              </Text>
+            </HStack>
+            <Text fontSize="sm" color="orange.600" mt={1}>
+              Please wait before teleporting again
+            </Text>
+          </Box>
+        )}
+
         <Divider />
 
         {/* Profile Information */}
@@ -908,12 +968,16 @@ const handleDeclineCrossTownTeleport = async () => {
                         variant="outline"
                         aria-label={`Teleport to ${friend.friendUserName}`}
                         onClick={() => handleSendTeleportRequest(friend)}
-                        isDisabled={friend.friendStatus !== 'Online'}
-                        title={friend.friendStatus !== 'Online' 
-                          ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` 
-                          : friend.friendTownID === townId 
-                            ? `Teleport to ${friend.friendUserName} (same town)`
-                            : `Teleport to ${friend.friendUserName} (cross-town)`}
+                        isDisabled={friend.friendStatus !== 'Online' || teleportCooldown > 0}
+                        title={
+                          teleportCooldown > 0
+                            ? `Teleport on cooldown (${teleportCooldown}s remaining)`
+                            : friend.friendStatus !== 'Online' 
+                              ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` 
+                              : friend.friendTownID === townId 
+                                ? `Teleport to ${friend.friendUserName} (same town)`
+                                : `Teleport to ${friend.friendUserName} (cross-town)`
+                        }
                       />
                       <IconButton
                         icon={<DeleteIcon />}

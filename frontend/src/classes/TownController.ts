@@ -127,9 +127,9 @@ export type TownEvents = {
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
   
   teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
-  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation;}) => void;
+  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation; cooldownRemaining?: number;}) => void;
   crossTownTeleportRequestReceived: (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
-  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string }) => void;};
+  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; }) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
