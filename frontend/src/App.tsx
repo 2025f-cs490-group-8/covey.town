@@ -406,7 +406,12 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
-  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  
+  React.useEffect(() => {
+    console.log('🔍 GoogleOAuthProvider Client ID:', googleClientId);
+    console.log('🔍 NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  }, [googleClientId]);
   
   const appContent = (
     <AppStateProvider>

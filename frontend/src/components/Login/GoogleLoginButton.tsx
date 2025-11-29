@@ -11,11 +11,13 @@ console.log("🔥 GoogleLoginButton component loaded");
 
 export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps): JSX.Element | null {
   const toast = useToast();
-  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
   
 
   React.useEffect(() => {
-    console.log('Google Client ID from env:', googleClientId);
+    console.log('🔍 GoogleLoginButton - Client ID:', googleClientId);
+    console.log('🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+    console.log('🔍 GoogleLoginButton - Redirect URI:', 'http://localhost:3000');
   }, [googleClientId]);
   
   const googleLogin = useGoogleLogin({
@@ -34,8 +36,20 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
         });
 
         if (!response.ok) {
-          const text = await response.text();
-          throw new Error(text || 'Failed to verify Google token');
+          let errorMessage = 'Failed to verify Google token';
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.message || errorMessage;
+          } catch {
+            const text = await response.text();
+            errorMessage = text || errorMessage;
+          }
+          console.error('Google login error:', {
+            status: response.status,
+            statusText: response.statusText,
+            message: errorMessage,
+          });
+          throw new Error(errorMessage);
         }
 
         const userInfo = await response.json();
@@ -53,12 +67,15 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
         });
       }
     },
-    onError: () => toast({
-      title: 'Error',
-      description: 'Google login failed',
-      status: 'error',
-      duration: 3000,
-    }),
+    onError: (error) => {
+      console.error('🚨 Google OAuth Error:', error);
+      toast({
+        title: 'Google Authorization Error',
+        description: error?.error_description || error?.error || 'Google login failed. Please check your OAuth client configuration in Google Cloud Console.',
+        status: 'error',
+        duration: 5000,
+      });
+    },
   });
 
 
