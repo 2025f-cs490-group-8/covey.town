@@ -418,6 +418,22 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         } else {
           this._ourPlayer.location = data.newLocation;
         }
+        // Emit playerMoved event to trigger proximity/video call updates
+        // This ensures the video/voice system recognizes the new position
+        if (this._ourPlayer) {
+          this.emit('playerMoved', this._ourPlayer);
+        }
+        // Also emit playersChanged to force immediate proximity recalculation
+        // This bypasses the 300ms delay in usePlayersInVideoCall
+        this.emit('playersChanged', this.players);
+        // Force immediate proximity check after a short delay to allow server's playerMoved to be processed
+        // This ensures both players' clients recalculate proximity
+        setTimeout(() => {
+          if (this._ourPlayer) {
+            this.emit('playerMoved', this._ourPlayer);
+          }
+          this.emit('playersChanged', this.players);
+        }, 100);
       }
       this.emit('teleportResult', data);
     });
@@ -507,7 +523,27 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
            */
           playerToUpdate.location.interactableID = movedPlayer.location.interactableID;
         } else {
+          const oldLocation = { ...playerToUpdate.location };
           playerToUpdate.location = movedPlayer.location;
+          // If another player moved significantly (like after teleportation), 
+          // check if they're now nearby and force immediate proximity recalculation
+          if (this._ourPlayer && this._ourPlayer.location) {
+            const dx = movedPlayer.location.x - this._ourPlayer.location.x;
+            const dy = movedPlayer.location.y - this._ourPlayer.location.y;
+            const newDistance = Math.sqrt(dx * dx + dy * dy);
+            const oldDx = oldLocation.x - this._ourPlayer.location.x;
+            const oldDy = oldLocation.y - this._ourPlayer.location.y;
+            const oldDistance = Math.sqrt(oldDx * oldDx + oldDy * oldDy);
+            // If player just moved into or out of proximity range, force immediate check
+            const wasNearby = oldDistance < 80;
+            const isNowNearby = newDistance < 80;
+            if (wasNearby !== isNowNearby) {
+              // Force immediate proximity recalculation by emitting playersChanged
+              setTimeout(() => {
+                this.emit('playersChanged', this.players);
+              }, 50);
+            }
+          }
         }
         this.emit('playerMoved', playerToUpdate);
       }
@@ -1022,7 +1058,15 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         const dx = p.location.x - this.ourPlayer.location.x;
         const dy = p.location.y - this.ourPlayer.location.y;
         const d = Math.sqrt(dx * dx + dy * dy);
-        return d < 80;
+        const nearby = d < 80;
+        // Debug logging for teleportation (can be removed later)
+        if (d < 100) { // Log if within 100 pixels for debugging
+          console.log(`Player ${p.userName} distance: ${d.toFixed(2)}px, nearby: ${nearby}`, {
+            ourPos: { x: this.ourPlayer.location.x, y: this.ourPlayer.location.y },
+            theirPos: { x: p.location.x, y: p.location.y }
+          });
+        }
+        return nearby;
       }
       return false;
     };
@@ -1333,17 +1377,44 @@ export function usePlayersInVideoCall(): PlayerController[] {
         lastRecalculatedNearbyPlayers = now;
         const nearbyPlayers = townController.nearbyPlayers();
         if (!samePlayers(nearbyPlayers, prevNearbyPlayers)) {
+          console.log('Players in video call changed:', {
+            before: prevNearbyPlayers.map(p => p.userName),
+            after: nearbyPlayers.map(p => p.userName)
+          });
           prevNearbyPlayers = nearbyPlayers;
           setPlayersInCall(nearbyPlayers);
         }
       }
     };
+    
+    // Force immediate update function for teleportation
+    const forceUpdatePlayersInCall = () => {
+      lastRecalculatedNearbyPlayers = 0; // Reset the timer to force immediate update
+      updatePlayersInCall();
+    };
+    
+    // Listen for teleport results to force immediate proximity recalculation
+    const handleTeleportResult = (data: { success: boolean; accepted?: boolean }) => {
+      if (data.success && data.accepted) {
+        console.log('Teleport successful, forcing proximity check...');
+        // After successful teleportation, force immediate proximity check
+        // This ensures video/voice connects immediately when players are teleported next to each other
+        setTimeout(() => {
+          const nearby = townController.nearbyPlayers();
+          console.log('Nearby players after teleport:', nearby.map(p => p.userName));
+          forceUpdatePlayersInCall();
+        }, 150); // Small delay to allow location updates to propagate
+      }
+    };
+    
     townController.addListener('playerMoved', updatePlayersInCall);
     townController.addListener('playersChanged', updatePlayersInCall);
+    townController.addListener('teleportResult', handleTeleportResult);
     updatePlayersInCall();
     return () => {
       townController.removeListener('playerMoved', updatePlayersInCall);
       townController.removeListener('playersChanged', updatePlayersInCall);
+      townController.removeListener('teleportResult', handleTeleportResult);
     };
   }, [townController, setPlayersInCall]);
   return playersInCall;

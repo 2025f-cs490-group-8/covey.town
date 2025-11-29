@@ -258,6 +258,17 @@ export default class Town {
           return;
         }
 
+        // Check if target player is online (required for teleportation)
+        const targetStatus = friendsStore.getUserStatus(data.toUserId);
+        if (targetStatus !== 'Online') {
+          socket.emit('teleportResult', {
+            success: false,
+            accepted: false,
+            reason: `Cannot teleport to ${targetPlayer.userName}. They are currently ${targetStatus.toLowerCase()}.`,
+          });
+          return;
+        }
+
         // Notify the target player about the teleport request
         const targetSocket = this._playerSockets.get(data.toUserId);
         if (!targetSocket) {
@@ -331,10 +342,11 @@ export default class Town {
 
         // Teleport the requesting player next to the accepting player
         // Place them adjacent to the target player based on their rotation
+        // IMPORTANT: Offset must be less than 80 pixels to trigger video/voice proximity system
         const targetLocation = newPlayer.location;
-        // Use a larger offset (about 6-7 tiles = 192-224 pixels) to ensure players are clearly separated
-        // This is roughly 2-3 player sprite widths away
-        const offset = 192;
+        // Use an offset of 60 pixels (within the 80 pixel proximity threshold for video/voice)
+        // This ensures players are close enough to see/hear each other after teleportation
+        const offset = 60;
         let teleportX = targetLocation.x;
         let teleportY = targetLocation.y;
 

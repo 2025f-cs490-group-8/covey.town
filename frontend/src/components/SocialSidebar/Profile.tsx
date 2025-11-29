@@ -680,6 +680,8 @@ const handleDeclineTeleport = async () => {
                         variant="outline"
                         aria-label={`Teleport to ${friend.friendUserName}`}
                         onClick={() => handleSendTeleportRequest(friend.friendId)}
+                        isDisabled={friend.friendStatus !== 'Online'}
+                        title={friend.friendStatus !== 'Online' ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` : `Teleport to ${friend.friendUserName}`}
                       />
                       <IconButton
                         icon={<DeleteIcon />}
