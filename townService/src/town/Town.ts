@@ -5,6 +5,8 @@ import InvalidParametersError from '../lib/InvalidParametersError';
 import IVideoClient from '../lib/IVideoClient';
 import Player from '../lib/Player';
 import TwilioVideo from '../lib/TwilioVideo';
+import FriendsStore from '../lib/FriendsStore';
+import CoveyTownsStore from '../lib/TownsStore';
 import { isViewingArea } from '../TestUtils';
 import {
   ChatMessage,
@@ -226,6 +228,29 @@ export default class Town {
     if (player.location.interactableID) {
       this._removePlayerFromInteractable(player);
     }
+
+    // Remove player town tracking
+    const townsStore = CoveyTownsStore.getInstance();
+    townsStore.removePlayerTown(player.id);
+
+    // Set status to Offline when player disconnects and notify friends
+    const friendsStore = FriendsStore.getInstance();
+    friendsStore.setUserStatus(player.id, 'Offline');
+
+    // Notify friends of status change (across all towns)
+    const friends = friendsStore.getFriends(player.id);
+    friends.forEach(friend => {
+      // Find friend across all towns (they might be in a different town)
+      const friendInfo = townsStore.findPlayerAcrossTowns(friend.friendId);
+      if (friendInfo) {
+        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
+          userId: player.id,
+          userName: player.userName,
+          status: 'Offline',
+        });
+      }
+    });
+
     this._players = this._players.filter(p => p.id !== player.id);
     this._broadcastEmitter.emit('playerDisconnect', player.toPlayerModel());
   }
