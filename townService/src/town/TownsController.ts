@@ -283,9 +283,12 @@ export class TownsController extends Controller {
 
       const friend = this._friendsStore.acceptFriendRequest(requestBody.requestId, player.id);
 
-      // Get user statuses for both players
-      const senderStatus = this._friendsStore.getUserStatus(request.fromUserId);
-      const accepterStatus = this._friendsStore.getUserStatus(player.id);
+      // Get user statuses for both players, but check if they're actually in a town
+      const senderTownID = this._townsStore.getPlayerTown(request.fromUserId);
+      const senderStatus = senderTownID 
+        ? this._friendsStore.getUserStatus(request.fromUserId) 
+        : 'Offline';
+      const accepterStatus = this._friendsStore.getUserStatus(player.id); // Accepter is in this town, so status is valid
 
       // Notify the sender (fromUserId) that their request was accepted
       // Find sender across all towns (they might be in a different town)
@@ -405,10 +408,12 @@ export class TownsController extends Controller {
     return friends.map(f => {
       const friendTownID = this._townsStore.getPlayerTown(f.friendId);
       const friendTown = friendTownID ? this._townsStore.getTownByID(friendTownID) : undefined;
+      // If friend is not in any town, their status should be Offline regardless of stored status
+      const actualStatus = friendTownID ? f.friendStatus : 'Offline';
       return {
         friendId: f.friendId,
         friendUserName: f.friendUserName,
-        friendStatus: f.friendStatus,
+        friendStatus: actualStatus,
         friendTownID: friendTownID || undefined,
         friendTownName: friendTown?.friendlyName || undefined,
       };
@@ -498,12 +503,13 @@ export class TownsController extends Controller {
     // Update status in store
     this._friendsStore.setUserStatus(player.id, requestBody.status);
 
-    // Notify all friends of the status change
+    // Notify all friends of the status change (across all towns)
     const friends = this._friendsStore.getFriends(player.id);
     friends.forEach(friend => {
-      const friendPlayer = town.players.find(p => p.id === friend.friendId);
-      if (friendPlayer) {
-        town.emitUserStatusUpdate(friendPlayer.id, {
+      // Find friend across all towns (they might be in a different town)
+      const friendInfo = this._townsStore.findPlayerAcrossTowns(friend.friendId);
+      if (friendInfo) {
+        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
           userId: player.id,
           userName: player.userName,
           status: requestBody.status,
@@ -642,6 +648,19 @@ export class TownsController extends Controller {
 
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(newPlayer.id, 'Online');
+
+    // Notify all friends across all towns that this player is now Online
+    const friends = this._friendsStore.getFriends(newPlayer.id);
+    friends.forEach(friend => {
+      const friendInfo = this._townsStore.findPlayerAcrossTowns(friend.friendId);
+      if (friendInfo) {
+        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
+          userId: newPlayer.id,
+          userName: newPlayer.userName,
+          status: 'Online',
+        });
+      }
+    });
 
     socket.emit('initialize', {
       userID: newPlayer.id,

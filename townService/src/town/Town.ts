@@ -739,12 +739,13 @@ export default class Town {
     const friendsStore = FriendsStore.getInstance();
     friendsStore.setUserStatus(player.id, 'Offline');
 
-    // Notify friends of status change
+    // Notify friends of status change (across all towns)
     const friends = friendsStore.getFriends(player.id);
     friends.forEach(friend => {
-      const friendPlayer = this._players.find(p => p.id === friend.friendId);
-      if (friendPlayer) {
-        this.emitUserStatusUpdate(friendPlayer.id, {
+      // Find friend across all towns (they might be in a different town)
+      const friendInfo = townsStore.findPlayerAcrossTowns(friend.friendId);
+      if (friendInfo) {
+        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
           userId: player.id,
           userName: player.userName,
           status: 'Offline',
