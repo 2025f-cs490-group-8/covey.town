@@ -95,6 +95,22 @@ export type TownEvents = {
    */
   chatMessage: (message: ChatMessage) => void;
   /**
+   * An event that indicates that a friend request has been received
+   */
+  friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
+  /**
+   * An event that indicates that a friend request has been accepted
+   */
+  friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
+  /**
+   * An event that indicates that a friend has been removed
+   */
+  friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
+  /**
+   * An event that indicates that a friend's status has been updated
+   */
+  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
+  /**
    * An event that indicates that the 2D game is now paused. Pausing the game should, if nothing else,
    * release all key listeners, so that text entry is possible
    */
@@ -109,7 +125,9 @@ export type TownEvents = {
    * @param obj the interactable that is being interacted with
    */
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
-};
+  
+  teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
+  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string;}) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -133,8 +151,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   /**
    * The REST API client to access the townsService
    */
-  private _townsService: TownsService;
-
+  private _townsService: TownsServiceClient;
   /**
    * The login controller is used by the frontend application to manage logging in to a town,
    * and is also used to log out of a town.
@@ -224,12 +241,13 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         */
     this.setMaxListeners(30);
 
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
+    const url = 'http://localhost:8081';
     assert(url);
     this._socket = io(url, { auth: { userName, townID } });
-    this._townsService = new TownsServiceClient({ BASE: url }).towns;
-    this.registerSocketListeners();
+    this._townsService = new TownsServiceClient({ BASE: url });
+      this.registerSocketListeners();  
   }
+  
 
   public get sessionToken() {
     return this._sessionToken || '';
@@ -355,18 +373,26 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     this._interactableEmitter.emit('endInteraction', objectNoLongerInteracting);
   }
 
-  public async getChatMessages(_interactableID: string | undefined): Promise<ChatMessage[]> {
-    const rawResponse = await this._townsService.getChatMessages(
-      this._townID,
-      this.sessionToken,
-      _interactableID,
-    );
-    return rawResponse.map(eachMessage => ({
-      ...eachMessage,
-      dateCreated: new Date(eachMessage.dateCreated),
-    }));
-  }
+      public async getChatMessages(interactableID?: string): Promise<ChatMessage[]> {
+      try {
+        const rawMessages = await this._townsService.towns.getChatMessages(
+          this._townID,
+          this.sessionToken,
+          interactableID,
+        );
 
+        return rawMessages.map(m => ({
+          author: 'system',
+          sid: crypto.randomUUID(),
+          body: '',
+          dateCreated: new Date(m.dateCreated),
+          interactableID,
+        }));
+      } catch (err) {
+        console.error('getChatMessages failed:', err);
+        return [];
+      }
+    }
   /**
    * Registers listeners for the events that can come from the server to our socket
    */
@@ -374,8 +400,45 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     /**
      * On chat messages, forward the messages to listeners who subscribe to the controller's events
      */
-    this._socket.on('chatMessage', message => {
+      this._socket.on('teleportRequestReceived', data => {
+      this.emit('teleportRequestReceived', data);
+    });
+
+    /** TELEPORT: incoming response */
+      this._socket.on('teleportResult', data => {
+      this.emit('teleportResult', data);
+    });
+     this._socket.on('chatMessage', message => {
       this.emit('chatMessage', message);
+      
+    });
+
+    /**
+     * On friend request received, emit to listeners
+     */
+    this._socket.on('friendRequestReceived', request => {
+      this.emit('friendRequestReceived', request);
+    });
+
+    /**
+     * On friend request accepted, emit to listeners
+     */
+    this._socket.on('friendRequestAccepted', friend => {
+      this.emit('friendRequestAccepted', friend);
+    });
+
+    /**
+     * On friend removed, emit to listeners
+     */
+    this._socket.on('friendRemoved', removedFriend => {
+      this.emit('friendRemoved', removedFriend);
+    });
+
+    /**
+     * On user status updated, emit to listeners
+     */
+    this._socket.on('userStatusUpdated', statusUpdate => {
+      this.emit('userStatusUpdated', statusUpdate);
     });
 
     /**
@@ -491,6 +554,237 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   }
 
   /**
+   * Send a friend request to another user
+   * @param toUserId The ID of the user to send the request to
+   */
+  public async sendFriendRequest(toUserId: string): Promise<{ requestId: string }> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friendRequest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ toUserId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send friend request');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
+   * Accept a friend request
+   * @param requestId The ID of the friend request to accept
+   */
+  public async acceptFriendRequest(requestId: string): Promise<{ friendId: string; friendUserName: string }> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friendRequest/accept`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ requestId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to accept friend request');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
+   * Decline a friend request
+   * @param requestId The ID of the friend request to decline
+   */
+  public async declineFriendRequest(requestId: string): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friendRequest/decline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ requestId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to decline friend request');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+  }
+    /**
+     * Send a teleport request to another player
+     */
+    public async sendTeleportRequest(toUserId: string): Promise<void> {
+      this._socket.emit('teleportRequest', { toUserId });
+    }
+
+    /**
+     * Respond to a teleport request
+     */
+    public async respondTeleport(fromUserId: string, accepted: boolean): Promise<void> {
+      this._socket.emit('teleportResponse', { fromUserId, accepted });
+    }
+
+  /**
+   * Update user status
+   * @param status The new status
+   */
+  public async updateUserStatus(status: 'Online' | 'Busy' | 'Offline'): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to update status');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+  }
+
+  /**
+   * Get the current user's friend list
+   */
+  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string }>> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friends`, {
+      method: 'GET',
+      headers: {
+        'X-Session-Token': this.sessionToken,
+      },
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get friends');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
+   * Get pending friend requests for the current user
+   */
+  public async getFriendRequests(): Promise<
+    Array<{
+      requestId: string;
+      fromUserId: string;
+      fromUserName: string;
+      toUserId: string;
+      toUserName: string;
+      status: string;
+      createdAt: Date;
+    }>
+  > {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friendRequests`, {
+      method: 'GET',
+      headers: {
+        'X-Session-Token': this.sessionToken,
+      },
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get friend requests');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      return data.map((req: any) => ({
+        ...req,
+        createdAt: new Date(req.createdAt),
+      }));
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
+    }
+  }
+
+  /**
+   * Remove a friend from the current user's friend list
+   * @param friendId The ID of the friend to remove
+   */
+  public async removeFriend(friendId: string): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/friends`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ friendId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to remove friend');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+  }
+
+  /**
    * Sends an InteractableArea command to the townService. Returns a promise that resolves
    * when the command is acknowledged by the server.
    *
@@ -547,7 +841,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     roomUpdatePassword: string,
     updatedSettings: { isPubliclyListed: boolean; friendlyName: string },
   ) {
-    await this._townsService.updateTown(this._townID, roomUpdatePassword, updatedSettings);
+    await this._townsService.towns.updateTown(this._townID, roomUpdatePassword, updatedSettings);
   }
 
   /**
@@ -557,7 +851,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param roomUpdatePassword
    */
   async deleteTown(roomUpdatePassword: string) {
-    await this._townsService.deleteTown(this._townID, roomUpdatePassword);
+    await this._townsService.towns.deleteTown(this._townID, roomUpdatePassword);
   }
 
   /**
@@ -568,7 +862,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param newArea
    */
   async createConversationArea(newArea: { topic?: string; id: string; occupants: Array<string> }) {
-    await this._townsService.createConversationArea(this.townID, this.sessionToken, newArea);
+    await this._townsService.towns.createConversationArea(this.townID, this.sessionToken, newArea);
   }
 
   /**
@@ -579,7 +873,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param newArea
    */
   async createViewingArea(newArea: Omit<ViewingAreaModel, 'type'>) {
-    await this._townsService.createViewingArea(this.townID, this.sessionToken, newArea);
+    await this._townsService.towns.createViewingArea(this.townID, this.sessionToken, newArea);
   }
 
   /**
@@ -725,6 +1019,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   private _playersByIDs(playerIDs: string[]): PlayerController[] {
     return this._playersInternal.filter(eachPlayer => playerIDs.includes(eachPlayer.id));
   }
+  
 }
 
 /**

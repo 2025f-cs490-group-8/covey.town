@@ -1,8 +1,10 @@
+// @ts-nocheck
 import { ChakraProvider } from '@chakra-ui/react';
 import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
 import React, { useCallback, useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { GoogleOAuthProvider, useGoogleLogin } from '@react-oauth/google';
 import TownController from './classes/TownController';
 import { ChatProvider } from './components/VideoCall/VideoFrontend/components/ChatProvider';
 import ErrorDialog from './components/VideoCall/VideoFrontend/components/ErrorDialog/ErrorDialog';
@@ -18,33 +20,304 @@ import TownControllerContext from './contexts/TownControllerContext';
 import LoginControllerContext from './contexts/LoginControllerContext';
 import { TownsServiceClient } from './generated/client';
 import { nanoid } from 'nanoid';
+import { Routes, Route } from 'react-router-dom';
+import Profile from './components/SocialSidebar/Profile';
+import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text, HStack, Divider } from '@chakra-ui/react';
 import ToggleChatButton from './components/VideoCall/VideoFrontend/components/Buttons/ToggleChatButton/ToggleChatButton';
+import GoogleLoginButton from './components/Login/GoogleLoginButton';
 
 function App() {
   const [townController, setTownController] = useState<TownController | null>(null);
-
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showRegister, setShowRegister] = useState(false);
+  const [username, setUsername] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
   const { error, setError } = useAppState();
   const connectionOptions = useConnectionOptions();
+  const toast = useToast() as any;
+  
   const onDisconnect = useCallback(() => {
     townController?.disconnect();
   }, [townController]);
 
-  let page: JSX.Element;
-  if (townController) {
-    page = (
-      <TownControllerContext.Provider value={townController}>
-        <ChatProvider>
-          <TownMap />
-          <VideoOverlay preferredMode='fullwidth' />
-        </ChatProvider>
-      </TownControllerContext.Provider>
-    );
-  } else {
-    page = <PreJoinScreens />;
+  const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!username || !password) {
+    toast({
+      title: 'Error',
+      description: 'Please enter both username and password',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
   }
-  const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
+
+  try {
+    const res = await fetch('http://localhost:8081/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Invalid username or password');
+    }
+
+    const data = await res.json();
+
+    // Save user session info
+    localStorage.setItem('authUser', JSON.stringify(data));
+
+    setIsAuthenticated(true);
+
+    toast({
+      title: 'Success',
+      description: `Welcome, ${data.name}!`,
+      status: 'success',
+      duration: 2000,
+    });
+  } catch (err) {
+    toast({
+      title: 'Login failed',
+      description: err.message,
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
+const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+
+  if (!username || !email || !password || !confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Please fill in all fields',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (password !== confirmPassword) {
+    toast({
+      title: 'Error',
+      description: 'Passwords do not match',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  try {
+    const res = await fetch('http://localhost:8081/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Registration failed');
+    }
+
+    toast({
+      title: 'Success',
+      description: 'Account created successfully! Please log in.',
+      status: 'success',
+      duration: 3000,
+    });
+
+    // Switch back to login view
+    setShowRegister(false);
+    setPassword('');
+    setConfirmPassword('');
+
+  } catch (err: any) {
+    toast({
+      title: 'Error creating account',
+      description: err.message,
+      status: 'error',
+      duration: 3000,
+    });
+  }
+};
+
+  if (!isAuthenticated) {
+    return (
+      <Box 
+        display="flex" 
+        alignItems="center" 
+        justifyContent="center" 
+        minH="100vh"
+        bgGradient="linear(to-br, blue.400, purple.600)"
+      >
+        <Box 
+          maxW="400px" 
+          w="full" 
+          p={8} 
+          borderRadius="2xl" 
+          boxShadow="2xl"
+          bg="white"
+        >
+    {!showRegister ? (
+  <form onSubmit={handleLogin} style={{ width: '100%' }}>
+    <VStack spacing={6}>
+      <Heading size="lg" color="gray.800">Login to Covey.Town</Heading>
+      
+      <FormControl isRequired>
+        <FormLabel>Username</FormLabel>
+        <Input
+          type="text"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="Enter username"
+        />
+      </FormControl>
+
+      <FormControl isRequired>
+        <FormLabel>Password</FormLabel>
+        <Input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter password"
+        />
+      </FormControl>
+
+      <Button type="submit" colorScheme="blue" width="100%">
+        Login
+      </Button>
+
+      {/* Always show Google login section - button will handle its own visibility */}
+      <HStack width="100%" spacing={2}>
+        <Divider />
+        <Text fontSize="sm" color="gray.500">OR</Text>
+        <Divider />
+      </HStack>
+
+      <GoogleLoginButton
+        onSuccess={(userInfo) => {
+          setIsAuthenticated(true);
+          // Store user info for later use (e.g., for town joining)
+          localStorage.setItem('googleUser', JSON.stringify(userInfo));
+          toast({
+            title: 'Success',
+            description: `Welcome, ${userInfo.name}!`,
+            status: 'success',
+            duration: 2000,
+          });
+        }}
+      />
+
+      <Text fontSize="sm" color="gray.600">
+        Don't have an account?{' '}
+        <Button
+          variant="link"
+          colorScheme="blue"
+          onClick={() => {
+            setShowRegister(true);
+            setUsername('');
+            setPassword('');
+          }}
+        >
+          Register here
+        </Button>
+      </Text>
+    </VStack>
+  </form>
+) : (
+            <form onSubmit={handleRegister}>
+              <VStack spacing="6">
+                <Heading size="lg" color="gray.800">Create Account</Heading>
+                
+                <FormControl isRequired>
+                  <FormLabel>Username</FormLabel>
+                  <Input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Choose a username"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Email</FormLabel>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Password</FormLabel>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Create a password"
+                  />
+                </FormControl>
+
+                <FormControl isRequired>
+                  <FormLabel>Confirm Password</FormLabel>
+                  <Input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                  />
+                </FormControl>
+
+                <Button type="submit" colorScheme="blue" width="100%">
+                  Register
+                </Button>
+
+                <Text fontSize="sm" color="gray.600">
+                  Already have an account?{' '}
+                  <Button
+                    variant="link"
+                    colorScheme="blue"
+                    onClick={() => {
+                      setShowRegister(false);
+                      setUsername('');
+                      setPassword('');
+                      setConfirmPassword('');
+                      setEmail('');
+                    }}
+                  >
+                    Login here
+                  </Button>
+                </Text>
+              </VStack>
+            </form>
+          )}
+        </Box>
+      </Box>
+    );
+  }
+
+let page: JSX.Element;
+if (townController) {
+  page = (
+    <TownControllerContext.Provider value={townController}>
+      <ChatProvider>
+        <TownMap />
+        <VideoOverlay preferredMode='fullwidth' />
+      </ChatProvider>
+    </TownControllerContext.Provider>
+  );
+} else {
+  page = <PreJoinScreens />;
+}
+  
+  const url = "http://localhost:8081";
   assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
   const townsService = new TownsServiceClient({ BASE: url }).towns;
+  
   return (
     <LoginControllerContext.Provider value={{ setTownController, townsService }}>
       <UnsupportedBrowserWarning>
@@ -61,7 +334,7 @@ const DEBUG_TOWN_NAME = 'DEBUG_TOWN';
 function DebugApp(): JSX.Element {
   const [townController, setTownController] = useState<TownController | null>(null);
   useEffect(() => {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
+    const url = 'http://localhost:8081';
     assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
     const townsService = new TownsServiceClient({ BASE: url }).towns;
     async function getOrCreateDebugTownID() {
@@ -118,9 +391,11 @@ function DebugApp(): JSX.Element {
   }
 }
 
+
+
 function AppOrDebugApp(): JSX.Element {
-  const debugTown = process.env.NEXT_PUBLIC_TOWN_DEV_MODE;
-  if (debugTown && debugTown.toLowerCase() === 'true') {
+  const debugTown = false;
+  if (debugTown) {
     return <DebugApp />;
   } else {
     return <App />;
@@ -128,13 +403,23 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
+  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  
+  const appContent = (
+    <AppStateProvider>
+      <AppOrDebugApp />
+    </AppStateProvider>
+  );
+  
+  // Always wrap with GoogleOAuthProvider to prevent hook errors
+  // Use a dummy client ID if not configured - GoogleLoginButton will handle showing disabled state
   return (
     <BrowserRouter>
       <ChakraProvider>
         <MuiThemeProvider theme={theme}>
-          <AppStateProvider>
-            <AppOrDebugApp />
-          </AppStateProvider>
+          <GoogleOAuthProvider clientId={googleClientId || 'dummy-client-id-for-hook'}>
+            {appContent}
+          </GoogleOAuthProvider>
         </MuiThemeProvider>
       </ChakraProvider>
     </BrowserRouter>

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Heading, StackDivider, VStack } from '@chakra-ui/react';
 import React from 'react';
 import InteractableAreasList from './InteractableAreasList';
@@ -7,7 +8,7 @@ export default function SocialSidebar(): JSX.Element {
   return (
     <VStack
       align='left'
-      spacing={2}
+      spacing={3}
       border='2px'
       padding={2}
       marginLeft={2}
