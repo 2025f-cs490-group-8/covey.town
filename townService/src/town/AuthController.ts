@@ -24,11 +24,11 @@ export class AuthController extends Controller {
   super();
 
   // Use environment variable if available, otherwise fallback to hardcoded value
-  const googleClientId = process.env.GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
   // Google only accepts HTTP on localhost — NOT HTTPS
   // IMPORTANT: This redirect URI MUST match exactly what's configured in Google Cloud Console
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000';
+  const redirectUri = 'http://localhost:3000';
 
   console.log('Google OAuth Configuration:', {
     clientId: googleClientId,
@@ -191,7 +191,7 @@ export class AuthController extends Controller {
       }
 
       // Use the same client ID that was used to initialize the OAuth2Client
-      const clientId = process.env.GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+      const clientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
       const ticket = await this._googleClient.verifyIdToken({
         idToken,
         audience: clientId,
@@ -237,7 +237,7 @@ export class AuthController extends Controller {
           console.error('Invalid client details:', {
             code: errorObj.code,
             message: errorObj.message,
-            clientId: process.env.GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com',
+            clientId: '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com',
             hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
             redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000',
           });
