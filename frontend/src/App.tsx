@@ -119,12 +119,15 @@ const handleRegister = async (e: React.FormEvent) => {
     });
 
     if (!res.ok) {
-      throw new Error('Registration failed');
+      const errorData = await res.json().catch(() => ({ message: 'Registration failed' }));
+      throw new Error(errorData.message || `Registration failed: ${res.status} ${res.statusText}`);
     }
+
+    const data = await res.json();
 
     toast({
       title: 'Success',
-      description: 'Account created successfully! Please log in.',
+      description: data.message || 'Account created successfully! Please log in.',
       status: 'success',
       duration: 3000,
     });
@@ -137,7 +140,7 @@ const handleRegister = async (e: React.FormEvent) => {
   } catch (err: any) {
     toast({
       title: 'Error creating account',
-      description: err.message,
+      description: err.message || 'An unexpected error occurred',
       status: 'error',
       duration: 3000,
     });
@@ -403,7 +406,12 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
-  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  
+  React.useEffect(() => {
+    console.log('🔍 GoogleOAuthProvider Client ID:', googleClientId);
+    console.log('🔍 NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+  }, [googleClientId]);
   
   const appContent = (
     <AppStateProvider>
