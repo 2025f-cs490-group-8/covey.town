@@ -6,7 +6,6 @@ import FriendsStore from '../lib/FriendsStore';
 import IVideoClient from '../lib/IVideoClient';
 import Player from '../lib/Player';
 import TwilioVideo from '../lib/TwilioVideo';
-import FriendsStore from '../lib/FriendsStore';
 import CoveyTownsStore from '../lib/TownsStore';
 import { isViewingArea } from '../TestUtils';
 import {
@@ -741,13 +740,6 @@ export default class Town {
     friendsStore.setUserStatus(player.id, 'Offline');
 
     // Notify friends of status change (across all towns)
-    const friends = friendsStore.getFriends(player.id);
-    friends.forEach(friend => {
-      // Find friend across all towns (they might be in a different town)
-      const friendInfo = townsStore.findPlayerAcrossTowns(friend.friendId);
-      if (friendInfo) {
-        friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
-    // Notify friends of status change
     const friends = friendsStore.getFriends(player.id);
     friends.forEach(friend => {
       // Find friend across all towns (they might be in a different town)
