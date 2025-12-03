@@ -172,7 +172,7 @@ export default class TownsStore {
    */
   getPlayerTown(playerId: string): string | undefined {
     return this._playerTowns.get(playerId);
-   }
+  }
 
   /**
    * Find a player across all towns by their user ID
@@ -201,7 +201,10 @@ export default class TownsStore {
    * @param excludePlayerId Optional player ID to exclude from results
    * @returns Array of players with their town information
    */
-  searchPlayersByUsername(username: string, excludePlayerId?: string): Array<{ player: Player; town: Town; townID: string }> {
+  searchPlayersByUsername(
+    username: string,
+    excludePlayerId?: string,
+  ): Array<{ player: Player; town: Town; townID: string }> {
     const results: Array<{ player: Player; town: Town; townID: string }> = [];
     const searchLower = username.toLowerCase();
 

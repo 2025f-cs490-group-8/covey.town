@@ -47,8 +47,10 @@ export default function TownSelection(): JSX.Element {
   const [currentPublicTowns, setCurrentPublicTowns] = useState<Town[]>();
   const [isJoining, setIsJoining] = useState<boolean>(false);
   const loginController = useLoginController();
-  const { setTownController, townsService } = loginController;
+  const { setTownController, townsService, accountUsername } = loginController;
   const { connect: videoConnect } = useVideoContext();
+
+      console.log('TownSelection - accountUsername from loginController:', accountUsername);
 
   const toast = useToast();
 
@@ -113,6 +115,7 @@ export default function TownSelection(): JSX.Element {
           userName,
           townID: coveyRoomID,
           loginController,
+          accountUsername: loginController.accountUsername,
         });
         await newController.connect();
         const videoToken = newController.providerVideoToken;
@@ -147,7 +150,7 @@ export default function TownSelection(): JSX.Element {
         }
       }
     },
-    [setTownController, userName, toast, videoConnect, loginController],
+    [setTownController, userName, toast, videoConnect, loginController, accountUsername],
   );
 
   const handleCreate = async () => {
