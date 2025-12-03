@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { connection } from '../api/SqlCalls';
 
 export interface User {
   id: string;
@@ -25,6 +26,9 @@ export default class UserStore {
   // Map from Google ID to user ID
   private _googleIdToUserId: Map<string, string> = new Map();
 
+  // Map from username to database user ID
+  private _usernameToDbId: Map<string, string> = new Map();
+
   static getInstance(): UserStore {
     if (UserStore._instance === undefined) {
       UserStore._instance = new UserStore();
@@ -34,6 +38,53 @@ export default class UserStore {
 
   private constructor() {
     // Private constructor for singleton
+  }
+
+  /**
+   * Get a user's permanent ID from database by username
+   */
+  async getUserIdByUsername(username: string): Promise<string | null> {
+    // Check cache first
+    const cachedId = this._usernameToDbId.get(username);
+    if (cachedId) {
+      return cachedId;
+    }
+
+    try {
+      const [rows] = await connection.execute<any[]>('SELECT id FROM Users WHERE userName = ?', [
+        username,
+      ]);
+
+      if (rows && rows.length > 0) {
+        const userId = rows[0].id.toString();
+        // Cache it
+        this._usernameToDbId.set(username, userId);
+        return userId;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error getting user ID by username:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Get a user's username by database ID
+   */
+  async getUsernameById(userId: string): Promise<string | null> {
+    try {
+      const [rows] = await connection.execute<any[]>('SELECT userName FROM Users WHERE id = ?', [
+        userId,
+      ]);
+
+      if (rows && rows.length > 0) {
+        return rows[0].userName;
+      }
+      return null;
+    } catch (err) {
+      console.error('Error getting username by ID:', err);
+      return null;
+    }
   }
 
   /**

@@ -251,14 +251,15 @@ export default class Town {
             socket.emit('teleportResult', {
               success: false,
               accepted: false,
-              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(
+                cooldownRemaining / 1000,
+              )} seconds.`,
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
-          } else {
-            // Cooldown has expired, remove it from the map to clean up
-            this._teleportCooldowns.delete(newPlayer.id);
           }
+          // Cooldown has expired, remove it from the map to clean up
+          this._teleportCooldowns.delete(newPlayer.id);
         }
 
         const targetPlayer = this._players.find(p => p.id === data.toUserId);
@@ -287,8 +288,9 @@ export default class Town {
         // Check if players are friends (required for teleportation)
         // Check both directions to ensure friendship is bidirectional
         const friendsStore = FriendsStore.getInstance();
-        const areFriends = friendsStore.areFriends(newPlayer.id, targetPlayer.id) || 
-                          friendsStore.areFriends(targetPlayer.id, newPlayer.id);
+        const areFriends =
+          friendsStore.areFriends(newPlayer.id, targetPlayer.id) ||
+          friendsStore.areFriends(targetPlayer.id, newPlayer.id);
         if (!areFriends) {
           socket.emit('teleportResult', {
             success: false,
@@ -305,7 +307,9 @@ export default class Town {
           socket.emit('teleportResult', {
             success: false,
             accepted: false,
-            reason: `Cannot teleport to ${targetPlayer.userName}. They are currently ${targetStatus.toLowerCase()}.`,
+            reason: `Cannot teleport to ${
+              targetPlayer.userName
+            }. They are currently ${targetStatus.toLowerCase()}.`,
             cooldownRemaining: 0,
           });
           return;
@@ -339,7 +343,7 @@ export default class Town {
           fromUserId: newPlayer.id,
           fromUserName: newPlayer.userName,
         });
-        
+
         // Also send a success result to the requesting player (request was sent)
         socket.emit('teleportResult', {
           success: true,
@@ -427,7 +431,7 @@ export default class Town {
           default:
             // Default: place to the right and slightly down (diagonal)
             teleportX = targetLocation.x + offset;
-            teleportY = targetLocation.y + (offset / 2);
+            teleportY = targetLocation.y + offset / 2;
             break;
         }
 
@@ -439,9 +443,6 @@ export default class Town {
           moving: false,
           interactableID: targetLocation.interactableID,
         };
-
-        // Log for debugging (can be removed later)
-        console.log(`Teleporting player ${requestingPlayer.userName} (${requestingPlayer.id}) from (${requestingPlayer.location.x}, ${requestingPlayer.location.y}) to (${teleportX}, ${teleportY}) next to ${newPlayer.userName} (${newPlayer.id}) at (${targetLocation.x}, ${targetLocation.y})`);
 
         // Update the requesting player's location
         // This will automatically broadcast the playerMoved event to all clients via _broadcastEmitter
@@ -504,20 +505,22 @@ export default class Town {
             socket.emit('crossTownTeleportResult', {
               success: false,
               accepted: false,
-              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(
+                cooldownRemaining / 1000,
+              )} seconds.`,
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
-          } else {
-            // Cooldown has expired, remove it from the map to clean up
-            this._teleportCooldowns.delete(newPlayer.id);
           }
+          // Cooldown has expired, remove it from the map to clean up
+          this._teleportCooldowns.delete(newPlayer.id);
         }
 
         // Check if players are friends
         const friendsStore = FriendsStore.getInstance();
-        const areFriends = friendsStore.areFriends(newPlayer.id, data.toUserId) ||
-                          friendsStore.areFriends(data.toUserId, newPlayer.id);
+        const areFriends =
+          friendsStore.areFriends(newPlayer.id, data.toUserId) ||
+          friendsStore.areFriends(data.toUserId, newPlayer.id);
         if (!areFriends) {
           socket.emit('crossTownTeleportResult', {
             success: false,
@@ -569,7 +572,7 @@ export default class Town {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
-            reason: 'Target player\'s town not found',
+            reason: "Target player's town not found",
             cooldownRemaining: 0,
           });
           return;
@@ -678,7 +681,7 @@ export default class Town {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
-            reason: 'Requesting player\'s town not found',
+            reason: "Requesting player's town not found",
           });
           return;
         }
