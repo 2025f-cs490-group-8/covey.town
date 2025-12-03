@@ -403,42 +403,13 @@ export default class Town {
           return;
         }
 
-        // Teleport the requesting player next to the accepting player
-        // Place them adjacent to the target player based on their rotation
-        // IMPORTANT: Offset must be less than 80 pixels to trigger video/voice proximity system
+        // Teleport the requesting player to the accepting player
         const targetLocation = newPlayer.location;
-        // Use an offset of 60 pixels (within the 80 pixel proximity threshold for video/voice)
-        // This ensures players are close enough to see/hear each other after teleportation
-        const offset = 60;
-        let teleportX = targetLocation.x;
-        let teleportY = targetLocation.y;
-
-        // Calculate position based on target's rotation
-        // In Phaser/top-down games, 'front' typically means facing down (positive Y)
-        switch (targetLocation.rotation) {
-          case 'front':
-            teleportY = targetLocation.y + offset; // In front (below the target)
-            break;
-          case 'back':
-            teleportY = targetLocation.y - offset; // Behind (above the target)
-            break;
-          case 'left':
-            teleportX = targetLocation.x - offset; // To the left of the target
-            break;
-          case 'right':
-            teleportX = targetLocation.x + offset; // To the right of the target
-            break;
-          default:
-            // Default: place to the right and slightly down (diagonal)
-            teleportX = targetLocation.x + offset;
-            teleportY = targetLocation.y + offset / 2;
-            break;
-        }
 
         // Create a new location object to ensure we're not modifying the target's location
         const teleportLocation: PlayerLocation = {
-          x: teleportX,
-          y: teleportY,
+          x: targetLocation.x,
+          y: targetLocation.y,
           rotation: targetLocation.rotation,
           moving: false,
           interactableID: targetLocation.interactableID,
