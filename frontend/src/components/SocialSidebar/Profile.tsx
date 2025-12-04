@@ -338,6 +338,14 @@ useEffect(() => {
           friend.friendId === statusUpdate.userId ||
           friend.friendUserName === statusUpdate.userName;
         if (!matches) return friend;
+        if (statusUpdate.status === 'Offline') {
+          return {
+            ...friend,
+            friendStatus: 'Offline',
+            friendTownID: undefined,
+            friendTownName: undefined,
+          };
+        }
         return {
           ...friend,
           friendStatus: (statusUpdate.status as UserStatus) || friend.friendStatus,

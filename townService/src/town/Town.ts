@@ -752,6 +752,8 @@ export default class Town {
           userId: player.id,
           userName: player.userName,
           status: 'Offline',
+          townID: undefined,
+          townName: undefined,
         });
       }
     });
@@ -965,7 +967,13 @@ export default class Town {
    */
   public emitUserStatusUpdate(
     playerId: string,
-    statusUpdate: { userId: string; userName: string; status: string },
+    statusUpdate: {
+      userId: string;
+      userName: string;
+      status: string;
+      townID?: string;
+      townName?: string;
+    },
   ): void {
     const socket = this._playerSockets.get(playerId);
     if (socket) {

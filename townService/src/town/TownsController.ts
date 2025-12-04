@@ -566,6 +566,8 @@ export class TownsController extends Controller {
             userId: player.id, // Send session ID to client
             userName: accountUsername, // Send account username
             status: requestBody.status,
+            townID: town.townID,
+            townName: town.friendlyName,
           });
         }
       }
@@ -728,6 +730,8 @@ export class TownsController extends Controller {
             userId: newPlayer.id, // Send session ID to client
             userName: accountUsername, // Send account username (persistent)
             status: 'Online',
+            townID: town.townID,
+            townName: town.friendlyName,
           });
         }
       }
@@ -761,6 +765,8 @@ export class TownsController extends Controller {
               userId: newPlayer.id,
               userName: accountUsername, // Send account username
               status: 'Offline',
+              townID: undefined,
+              townName: undefined,
             });
           }
         }
