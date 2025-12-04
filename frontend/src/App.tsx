@@ -109,6 +109,16 @@ function App() {
     return;
   }
 
+  if (username.includes(" ")){
+    toast({
+      title: 'Error',
+      description: 'Username can not include space',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
   if (password !== confirmPassword) {
     toast({
       title: 'Error',
