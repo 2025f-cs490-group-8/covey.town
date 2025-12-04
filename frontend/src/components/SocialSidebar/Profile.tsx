@@ -332,12 +332,19 @@ useEffect(() => {
     };
 
     // Listen for user status updates from friends
-    const handleStatusUpdate = (statusUpdate: { userId: string; userName: string; status: string }) => {
-      setFriends(prev => prev.map(friend =>
-        friend.friendId === statusUpdate.userId
-          ? { ...friend, friendStatus: statusUpdate.status as UserStatus }
-          : friend
-      ));
+    const handleStatusUpdate = (statusUpdate: any) => {
+      setFriends(prev => prev.map(friend => {
+        const matches =
+          friend.friendId === statusUpdate.userId ||
+          friend.friendUserName === statusUpdate.userName;
+        if (!matches) return friend;
+        return {
+          ...friend,
+          friendStatus: (statusUpdate.status as UserStatus) || friend.friendStatus,
+          friendTownID: statusUpdate.friendTownID ?? statusUpdate.townID ?? friend.friendTownID,
+          friendTownName: statusUpdate.friendTownName ?? statusUpdate.townName ?? friend.friendTownName,
+        };
+      }));
     };
 
     // Listen for friend removed events
