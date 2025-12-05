@@ -954,17 +954,7 @@ const handleDeclineCrossTownTeleport = async () => {
           </InputGroup>
 
 
-          {/* Logout */}
-          <Button
-              leftIcon={<ArrowBackIcon/>}
-              onClick={handleLogout}
-              colorScheme="red"
-              variant="ghost"
-              width="100%"
-              mt={4}
-            >
-          Logout
-        </Button>
+        
           {/* Error Message */}
           {error && (
             <Alert status="error" mb={4}>
@@ -1049,6 +1039,17 @@ const handleDeclineCrossTownTeleport = async () => {
             </VStack>
           )}
         </Box>
+         {/* Logout */}
+          <Button
+              leftIcon={<ArrowBackIcon/>}
+              onClick={handleLogout}
+              colorScheme="red"
+              variant="ghost"
+              width="100%"
+              mt={4}
+            >
+          Logout
+        </Button>
 
         <Divider />
 
