@@ -110,7 +110,7 @@ export type TownEvents = {
   /**
    * An event that indicates that a friend's status has been updated
    */
-  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
+  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string; townID?: string; townName?: string; }) => void;
   /**
    * An event that indicates that the 2D game is now paused. Pausing the game should, if nothing else,
    * release all key listeners, so that text entry is possible
