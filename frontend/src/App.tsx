@@ -179,7 +179,13 @@ function App() {
     });
   }
 };
-
+  useEffect(() => {
+    const savedUser = localStorage.getItem('accountUsername');
+    const googleUser = localStorage.getItem('googleUser');
+    //Force login screen by clearing old values
+    localStorage.removeItem('accountUsername');
+    localStorage.removeItem('googleUser');
+  }, []);
   if (!isAuthenticated) {
     return (
       <Box 
