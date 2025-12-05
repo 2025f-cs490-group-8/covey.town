@@ -198,12 +198,16 @@ useEffect(() => {
         setTeleportCooldown(10);
       }
       // Dispatch custom event for town switching - will be handled by separate useEffect
-      window.dispatchEvent(new CustomEvent('switchTown', { 
-        detail: { 
-          townID: data.targetTownID,
-          townName: data.targetTownName 
-        } 
-      }));
+      // hacky fix to prevent town switch if already in that town
+      if (data.targetTownID !== townController.townID) {
+        window.dispatchEvent(new CustomEvent('switchTown', { 
+          detail: { 
+            townID: data.targetTownID,
+            townName: data.targetTownName 
+          } 
+        }));
+      }
+      
     } else if (data.success && data.accepted === undefined) {
       // Request was sent successfully, but not yet accepted/declined
       // Don't show any message - the initial "request sent" toast is already shown
@@ -388,6 +392,7 @@ useEffect(() => {
           userName: username,
           townID: townID,
           loginController,
+          accountUsername: loginController.accountUsername,
         });
         
         await newController.connect();
