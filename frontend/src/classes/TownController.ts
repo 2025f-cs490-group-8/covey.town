@@ -112,6 +112,14 @@ export type TownEvents = {
    */
   userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
   /**
+   * An event that indicates that the current user has been blocked by another user
+   */
+  userBlocked: (blockData: { blockerId: string; blockerUserName: string }) => void;
+  /**
+   * An event that indicates that the current user has been unblocked by another user
+   */
+  userUnblocked: (unblockData: { unblockerId: string; unblockerUserName: string }) => void;
+  /**
    * An event that indicates that the 2D game is now paused. Pausing the game should, if nothing else,
    * release all key listeners, so that text entry is possible
    */
@@ -482,6 +490,20 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
      */
     this._socket.on('userStatusUpdated', statusUpdate => {
       this.emit('userStatusUpdated', statusUpdate);
+    });
+
+    /**
+     * On user blocked, emit to listeners
+     */
+    this._socket.on('userBlocked', blockData => {
+      this.emit('userBlocked', blockData);
+    });
+
+    /**
+     * On user unblocked, emit to listeners
+     */
+    this._socket.on('userUnblocked', unblockData => {
+      this.emit('userUnblocked', unblockData);
     });
 
     /**
@@ -893,6 +915,98 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         const text = await response.text();
         throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
       }
+    }
+  }
+
+  /**
+   * Block a user. This removes the friendship and prevents future interactions.
+   * @param userId The ID of the user to block
+   */
+  public async blockUser(userId: string): Promise<void> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/block`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ userId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to block user');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+  }
+
+  /**
+   * Unblock a user and restore the friendship
+   * @param userId The ID of the user to unblock
+   * @returns Info about whether the friend was restored
+   */
+  public async unblockUser(userId: string): Promise<{ friendRestored: boolean; friend?: { friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string } }> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/unblock`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Session-Token': this.sessionToken,
+      },
+      body: JSON.stringify({ userId }),
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to unblock user');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      return response.json();
+    }
+    return { friendRestored: false };
+  }
+
+  /**
+   * Get list of blocked users
+   */
+  public async getBlockedUsers(): Promise<Array<{ blockedId: string; blockedUserName: string; createdAt: Date }>> {
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const response = await fetch(`${url}/towns/${this.townID}/blocked`, {
+      method: 'GET',
+      headers: {
+        'X-Session-Token': this.sessionToken,
+      },
+    });
+    if (!response.ok) {
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to get blocked users');
+      } else {
+        const text = await response.text();
+        throw new Error(`Server error (${response.status}): ${text.substring(0, 100)}`);
+      }
+    }
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      const data = await response.json();
+      return data.map((b: any) => ({
+        ...b,
+        createdAt: new Date(b.createdAt),
+      }));
+    } else {
+      const text = await response.text();
+      throw new Error(`Invalid response format: ${text.substring(0, 100)}`);
     }
   }
 

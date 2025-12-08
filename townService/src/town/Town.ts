@@ -1020,6 +1020,36 @@ export default class Town {
   }
 
   /**
+   * Emit a user blocked notification to a specific player
+   * @param playerId The ID of the player to notify (the one being blocked)
+   * @param blockData The block event data
+   */
+  public emitUserBlocked(
+    playerId: string,
+    blockData: { blockerId: string; blockerUserName: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('userBlocked', blockData);
+    }
+  }
+
+  /**
+   * Emit a user unblocked notification to a specific player
+   * @param playerId The ID of the player to notify (the one being unblocked)
+   * @param unblockData The unblock event data
+   */
+  public emitUserUnblocked(
+    playerId: string,
+    unblockData: { unblockerId: string; unblockerUserName: string },
+  ): void {
+    const socket = this._playerSockets.get(playerId);
+    if (socket) {
+      socket.emit('userUnblocked', unblockData);
+    }
+  }
+
+  /**
    * Informs all players' clients that they are about to be disconnected, and then
    * disconnects all players.
    */
