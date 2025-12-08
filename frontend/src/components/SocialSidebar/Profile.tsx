@@ -66,7 +66,7 @@ export default function Profile(): JSX.Element {
   const teleportModal = useDisclosure();
   const townController = useTownController();
   const loginController = useLoginController();
-  const { connect: videoConnect, room: videoRoom } = useVideoContext();
+  const { connect: videoConnect, room: videoRoom, getAudioAndVideoTracks } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
@@ -417,10 +417,27 @@ useEffect(() => {
         if (videoToken) {
           // Small delay to ensure old video room is fully disconnected
           await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Force re-acquire fresh local audio/video tracks for the new video room
+          // This is necessary because the disconnection handler removes/stops the old tracks
+          console.log('Re-acquiring local audio/video tracks for cross-town video reconnection...');
+          try {
+            await getAudioAndVideoTracks(true); // force=true to get fresh tracks
+            console.log('Local tracks re-acquired successfully');
+            
+            // Small delay to allow React to re-render with the new tracks
+            // This ensures the videoConnect function has access to the updated localTracks
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (trackError) {
+            console.warn('Could not re-acquire local tracks:', trackError);
+            // Continue anyway - video will work without camera/mic if needed
+          }
+          
           console.log('Connecting to new video room...');
           await videoConnect(videoToken);
           console.log('Video connected successfully');
         }
+        
         setTownController(newController);
       } catch (err) {
         toast({
@@ -436,7 +453,7 @@ useEffect(() => {
     return () => {
       window.removeEventListener('switchTown', handleSwitchTown as EventListener);
     };
-  }, [townController, loginController, username, toast, videoConnect, videoRoom]);
+  }, [townController, loginController, username, toast, videoConnect, videoRoom, getAudioAndVideoTracks]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
