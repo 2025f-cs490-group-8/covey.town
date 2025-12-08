@@ -616,8 +616,12 @@ export class TownsController extends Controller {
    *
    */
   public async joinTown(socket: CoveyTownSocket) {
-    // Parse the client's requested username from the connection
-    const { userName, townID } = socket.handshake.auth as { userName: string; townID: string };
+    // Parse the client's requested username and optional spawn location from the connection
+    const { userName, townID, spawnLocation } = socket.handshake.auth as { 
+      userName: string; 
+      townID: string; 
+      spawnLocation?: { x: number; y: number; rotation: string; moving: boolean };
+    };
 
     const town = this._townsStore.getTownByID(townID);
     if (!town) {
@@ -628,7 +632,9 @@ export class TownsController extends Controller {
     // Connect the client to the socket.io broadcast room for this town
     socket.join(town.townID);
 
-    const newPlayer = await town.addPlayer(userName, socket);
+    console.log('joinTown called with spawnLocation:', spawnLocation);
+    const newPlayer = await town.addPlayer(userName, socket, spawnLocation);
+    console.log('Player created with location:', newPlayer.location);
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
     console.log('Identity:', newPlayer.userName);

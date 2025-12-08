@@ -51,6 +51,7 @@ export type ConnectionProperties = {
   userName: string;
   townID: string;
   loginController: LoginController;
+  spawnLocation?: PlayerLocation;
 };
 
 /**
@@ -129,7 +130,7 @@ export type TownEvents = {
   teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
   teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation; cooldownRemaining?: number;}) => void;
   crossTownTeleportRequestReceived: (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
-  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; }) => void;};
+  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; spawnLocation?: PlayerLocation; }) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -230,7 +231,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   private _interactableEmitter = new EventEmitter();
 
-  public constructor({ userName, townID, loginController }: ConnectionProperties) {
+  public constructor({ userName, townID, loginController, spawnLocation }: ConnectionProperties) {
     super();
     this._townID = townID;
     this._userName = userName;
@@ -245,7 +246,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
 
     const url = 'http://localhost:8081';
     assert(url);
-    this._socket = io(url, { auth: { userName, townID } });
+    this._socket = io(url, { auth: { userName, townID, spawnLocation } });
     this._townsService = new TownsServiceClient({ BASE: url });
       this.registerSocketListeners();  
   }

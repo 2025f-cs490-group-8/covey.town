@@ -411,13 +411,23 @@ export default class TownGameScene extends Phaser.Scene {
     // Create a sprite with physics enabled via the physics system. The image used for the sprite
     // has a bit of whitespace, so I'm using setSize & setOffset to control the size of the
     // player's body.
+    
+    // Use player's actual location if set (for cross-town teleport), otherwise use map spawn point
+    const playerLocation = this.coveyTownController.ourPlayer.location;
+    console.log('TownGameScene create: ourPlayer.location =', playerLocation);
+    console.log('TownGameScene create: map spawnPoint =', { x: spawnPoint.x, y: spawnPoint.y });
+    const startX = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.x : spawnPoint.x;
+    const startY = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.y : spawnPoint.y;
+    const startRotation = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.rotation : 'front';
+    console.log('TownGameScene create: using start position =', { x: startX, y: startY, rotation: startRotation });
+    
     const sprite = this.physics.add
-      .sprite(spawnPoint.x, spawnPoint.y, 'atlas', 'misa-front')
+      .sprite(startX, startY, 'atlas', `misa-${startRotation}`)
       .setSize(30, 40)
       .setOffset(0, 24)
       .setDepth(6);
     const label = this.add
-      .text(spawnPoint.x, spawnPoint.y - 20, '(You)', {
+      .text(startX, startY - 20, '(You)', {
         font: '18px monospace',
         color: '#000000',
         // padding: {x: 20, y: 10},
@@ -432,7 +442,7 @@ export default class TownGameScene extends Phaser.Scene {
 
     this._interactables = this.getInteractables();
 
-    this.moveOurPlayerTo({ rotation: 'front', moving: false, x: spawnPoint.x, y: spawnPoint.y });
+    this.moveOurPlayerTo({ rotation: startRotation, moving: false, x: startX, y: startY });
 
     // Watch the player and worldLayer for collisions, for the duration of the scene:
     this._collidingLayers.push(worldLayer);

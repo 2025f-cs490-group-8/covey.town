@@ -188,7 +188,8 @@ useEffect(() => {
     crossTownTeleportModal.onOpen();
   };
 
-  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number }) => {
+  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; spawnLocation?: { x: number; y: number; rotation: string; moving: boolean } }) => {
+    console.log('crossTownTeleportResult received:', data);
     if (data.success && data.accepted && data.targetTownID) {
       // Set cooldown if provided
       if (data.cooldownRemaining !== undefined) {
@@ -197,13 +198,24 @@ useEffect(() => {
         // Default to 10 seconds when teleport succeeds
         setTeleportCooldown(10);
       }
+      console.log('Dispatching switchTown with spawnLocation:', data.spawnLocation);
       // Dispatch custom event for town switching - will be handled by separate useEffect
       window.dispatchEvent(new CustomEvent('switchTown', { 
         detail: { 
           townID: data.targetTownID,
-          townName: data.targetTownName 
+          townName: data.targetTownName,
+          spawnLocation: data.spawnLocation
         } 
       }));
+    } else if (data.success && data.accepted && !data.targetTownID) {
+      // Accepting player received confirmation - they stay in their current town
+      toast({
+        title: 'Teleport Successful',
+        description: 'Your friend is teleporting to you!',
+        status: 'success',
+        duration: 3000,
+      });
+      return;
     } else if (data.success && data.accepted === undefined) {
       // Request was sent successfully, but not yet accepted/declined
       // Don't show any message - the initial "request sent" toast is already shown
@@ -367,8 +379,9 @@ useEffect(() => {
 
   // Handle town switching for cross-town teleport
   useEffect(() => {
-    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string }>) => {
-      const { townID, townName } = event.detail;
+    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string; spawnLocation?: { x: number; y: number; rotation: string; moving: boolean } }>) => {
+      const { townID, townName, spawnLocation } = event.detail;
+      console.log('handleSwitchTown: received spawnLocation =', spawnLocation);
       try {
         toast({
           title: 'Teleport Accepted',
@@ -382,12 +395,14 @@ useEffect(() => {
         // Disconnect current town
         townController.disconnect();
         
-        // Create new town controller and connect
+        // Create new town controller and connect with spawn location
         const TownController = (await import('../../classes/TownController')).default;
+        console.log('Creating TownController with spawnLocation:', spawnLocation);
         const newController = new TownController({
           userName: username,
           townID: townID,
           loginController,
+          spawnLocation,
         });
         
         await newController.connect();
