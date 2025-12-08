@@ -66,7 +66,7 @@ export default function Profile(): JSX.Element {
   const teleportModal = useDisclosure();
   const townController = useTownController();
   const loginController = useLoginController();
-  const { connect: videoConnect } = useVideoContext();
+  const { connect: videoConnect, room: videoRoom } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
@@ -392,6 +392,12 @@ useEffect(() => {
         
         const { setTownController } = loginController;
         
+        // Disconnect from current video room first
+        if (videoRoom) {
+          console.log('Disconnecting from current video room...');
+          videoRoom.disconnect();
+        }
+        
         // Disconnect current town
         townController.disconnect();
         
@@ -407,8 +413,13 @@ useEffect(() => {
         
         await newController.connect();
         const videoToken = newController.providerVideoToken;
+        console.log('New town connected, video token:', videoToken ? 'obtained' : 'missing');
         if (videoToken) {
+          // Small delay to ensure old video room is fully disconnected
+          await new Promise(resolve => setTimeout(resolve, 500));
+          console.log('Connecting to new video room...');
           await videoConnect(videoToken);
+          console.log('Video connected successfully');
         }
         setTownController(newController);
       } catch (err) {
@@ -425,7 +436,7 @@ useEffect(() => {
     return () => {
       window.removeEventListener('switchTown', handleSwitchTown as EventListener);
     };
-  }, [townController, loginController, username, toast, videoConnect]);
+  }, [townController, loginController, username, toast, videoConnect, videoRoom]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {
