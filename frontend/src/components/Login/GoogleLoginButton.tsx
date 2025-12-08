@@ -11,7 +11,7 @@ console.log("🔥 GoogleLoginButton component loaded");
 
 export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps): JSX.Element | null {
   const toast = useToast();
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   
 
   React.useEffect(() => {
@@ -26,8 +26,7 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
     onSuccess: async (codeResponse) => {
       try {
         const url =
-          process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL ||
-          'http://localhost:8081'; 
+          process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL; 
 
         const response = await fetch(`${url}/auth/google`, {
           method: 'POST',

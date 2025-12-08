@@ -634,7 +634,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param toUserId The ID of the user to send the request to
    */
   public async sendFriendRequest(toUserId: string): Promise<{ requestId: string }> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friendRequest`, {
       method: 'POST',
       headers: {
@@ -667,7 +667,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param requestId The ID of the friend request to accept
    */
   public async acceptFriendRequest(requestId: string): Promise<{ friendId: string; friendUserName: string }> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friendRequest/accept`, {
       method: 'POST',
       headers: {
@@ -700,7 +700,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param requestId The ID of the friend request to decline
    */
   public async declineFriendRequest(requestId: string): Promise<void> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friendRequest/decline`, {
       method: 'POST',
       headers: {
@@ -756,7 +756,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param status The new status
    */
   public async updateUserStatus(status: 'Online' | 'Busy' | 'Offline'): Promise<void> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/status`, {
       method: 'POST',
       headers: {
@@ -783,7 +783,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @returns Array of matching players with their town information
    */
   public async searchPlayers(query: string): Promise<Array<{ playerId: string; userName: string; townID: string; townName: string }>> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/searchPlayers?query=${encodeURIComponent(query)}`, {
       method: 'GET',
       headers: {
@@ -813,7 +813,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * Get the current user's friend list
    */
   public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string; friendTownID?: string; friendTownName?: string }>> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'GET',
       headers: {
@@ -853,7 +853,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       createdAt: Date;
     }>
   > {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friendRequests`, {
       method: 'GET',
       headers: {
@@ -888,7 +888,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param friendId The ID of the friend to remove
    */
   public async removeFriend(friendId: string): Promise<void> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'DELETE',
       headers: {
