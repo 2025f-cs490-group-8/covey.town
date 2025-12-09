@@ -13,6 +13,9 @@ export default function useRoom(localTracks: LocalTrack[], onError: Callback, op
   const [room, setRoom] = useState<Room | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const optionsRef = useRef(options);
+  // Use a ref for localTracks so connect always has access to the latest tracks
+  // This is important for cross-town video reconnection where tracks are re-acquired
+  const localTracksRef = useRef(localTracks);
 
   useEffect(() => {
     // This allows the connect function to always access the most recent version of the options object. This allows us to
@@ -20,10 +23,16 @@ export default function useRoom(localTracks: LocalTrack[], onError: Callback, op
     optionsRef.current = options;
   }, [options]);
 
+  useEffect(() => {
+    // Keep the localTracks ref updated with the latest tracks
+    localTracksRef.current = localTracks;
+  }, [localTracks]);
+
   const connect = useCallback(
     token => {
       setIsConnecting(true);
-      return Video.connect(token, { ...optionsRef.current, tracks: localTracks }).then(
+      // Use localTracksRef.current to get the latest tracks at call time
+      return Video.connect(token, { ...optionsRef.current, tracks: localTracksRef.current }).then(
         newRoom => {
           setRoom(newRoom);
           VideoRoomMonitor.registerVideoRoom(newRoom);
@@ -69,7 +78,7 @@ export default function useRoom(localTracks: LocalTrack[], onError: Callback, op
         }
       );
     },
-    [localTracks, onError]
+    [onError] // Removed localTracks since we use localTracksRef for latest tracks
   );
 
   return { room, isConnecting, connect };

@@ -66,7 +66,7 @@ export default function Profile(): JSX.Element {
   const teleportModal = useDisclosure();
   const townController = useTownController();
   const loginController = useLoginController();
-  const { connect: videoConnect } = useVideoContext();
+  const { connect: videoConnect, room: videoRoom, getAudioAndVideoTracks } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
   const toast = useToast();
@@ -188,7 +188,8 @@ useEffect(() => {
     crossTownTeleportModal.onOpen();
   };
 
-  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number }) => {
+  const crossTownResultHandler = (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; spawnLocation?: { x: number; y: number; rotation: string; moving: boolean } }) => {
+    console.log('crossTownTeleportResult received:', data);
     if (data.success && data.accepted && data.targetTownID) {
       // Set cooldown if provided
       if (data.cooldownRemaining !== undefined) {
@@ -197,17 +198,24 @@ useEffect(() => {
         // Default to 10 seconds when teleport succeeds
         setTeleportCooldown(10);
       }
+      console.log('Dispatching switchTown with spawnLocation:', data.spawnLocation);
       // Dispatch custom event for town switching - will be handled by separate useEffect
-      // hacky fix to prevent town switch if already in that town
-      if (data.targetTownID !== townController.townID) {
-        window.dispatchEvent(new CustomEvent('switchTown', { 
-          detail: { 
-            townID: data.targetTownID,
-            townName: data.targetTownName 
-          } 
-        }));
-      }
-      
+      window.dispatchEvent(new CustomEvent('switchTown', { 
+        detail: { 
+          townID: data.targetTownID,
+          townName: data.targetTownName,
+          spawnLocation: data.spawnLocation
+        } 
+      }));
+    } else if (data.success && data.accepted && !data.targetTownID) {
+      // Accepting player received confirmation - they stay in their current town
+      toast({
+        title: 'Teleport Successful',
+        description: 'Your friend is teleporting to you!',
+        status: 'success',
+        duration: 3000,
+      });
+      return;
     } else if (data.success && data.accepted === undefined) {
       // Request was sent successfully, but not yet accepted/declined
       // Don't show any message - the initial "request sent" toast is already shown
@@ -386,8 +394,9 @@ useEffect(() => {
 
   // Handle town switching for cross-town teleport
   useEffect(() => {
-    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string }>) => {
-      const { townID, townName } = event.detail;
+    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string; spawnLocation?: { x: number; y: number; rotation: string; moving: boolean } }>) => {
+      const { townID, townName, spawnLocation } = event.detail;
+      console.log('handleSwitchTown: received spawnLocation =', spawnLocation);
       try {
         toast({
           title: 'Teleport Accepted',
@@ -398,23 +407,52 @@ useEffect(() => {
         
         const { setTownController } = loginController;
         
+        // Disconnect from current video room first
+        if (videoRoom) {
+          console.log('Disconnecting from current video room...');
+          videoRoom.disconnect();
+        }
+        
         // Disconnect current town
         townController.disconnect();
         
-        // Create new town controller and connect
+        // Create new town controller and connect with spawn location
         const TownController = (await import('../../classes/TownController')).default;
+        console.log('Creating TownController with spawnLocation:', spawnLocation);
         const newController = new TownController({
           userName: username,
           townID: townID,
           loginController,
-          accountUsername: loginController.accountUsername,
+          spawnLocation,
         });
         
         await newController.connect();
         const videoToken = newController.providerVideoToken;
+        console.log('New town connected, video token:', videoToken ? 'obtained' : 'missing');
         if (videoToken) {
+          // Small delay to ensure old video room is fully disconnected
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          // Force re-acquire fresh local audio/video tracks for the new video room
+          // This is necessary because the disconnection handler removes/stops the old tracks
+          console.log('Re-acquiring local audio/video tracks for cross-town video reconnection...');
+          try {
+            await getAudioAndVideoTracks(true); // force=true to get fresh tracks
+            console.log('Local tracks re-acquired successfully');
+            
+            // Small delay to allow React to re-render with the new tracks
+            // This ensures the videoConnect function has access to the updated localTracks
+            await new Promise(resolve => setTimeout(resolve, 100));
+          } catch (trackError) {
+            console.warn('Could not re-acquire local tracks:', trackError);
+            // Continue anyway - video will work without camera/mic if needed
+          }
+          
+          console.log('Connecting to new video room...');
           await videoConnect(videoToken);
+          console.log('Video connected successfully');
         }
+        
         setTownController(newController);
       } catch (err) {
         toast({
@@ -430,7 +468,7 @@ useEffect(() => {
     return () => {
       window.removeEventListener('switchTown', handleSwitchTown as EventListener);
     };
-  }, [townController, loginController, username, toast, videoConnect]);
+  }, [townController, loginController, username, toast, videoConnect, videoRoom, getAudioAndVideoTracks]);
 
   const getStatusColor = (status: UserStatus) => {
     switch (status) {

@@ -56,11 +56,24 @@ export default function useLocalTracks() {
     }
   }, [videoTrack]);
 
-  const getAudioAndVideoTracks = useCallback(async () => {
+  const getAudioAndVideoTracks = useCallback(async (forceReacquire: boolean = false) => {
     const { audioInputDevices, videoInputDevices, hasAudioInputDevices, hasVideoInputDevices } = await getDeviceInfo();
 
     if (!hasAudioInputDevices && !hasVideoInputDevices) return Promise.resolve();
-    if (isAcquiringLocalTracks || audioTrack || videoTrack) return Promise.resolve();
+    
+    // If forceReacquire is true, stop and clear existing tracks first
+    if (forceReacquire) {
+      if (audioTrack) {
+        audioTrack.stop();
+        setAudioTrack(undefined);
+      }
+      if (videoTrack) {
+        videoTrack.stop();
+        setVideoTrack(undefined);
+      }
+    } else if (isAcquiringLocalTracks || audioTrack || videoTrack) {
+      return Promise.resolve();
+    }
 
     setIsAcquiringLocalTracks(true);
 

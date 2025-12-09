@@ -124,10 +124,23 @@ export default class Town {
    * Adds a player to this Covey Town, provisioning the necessary credentials for the
    * player, and returning them
    *
-   * @param newPlayer The new player to add to the town
+   * @param userName The username of the new player
+   * @param socket The socket connection for this player
+   * @param spawnLocation Optional spawn location for cross-town teleportation
    */
-  async addPlayer(userName: string, socket: CoveyTownSocket): Promise<Player> {
+  async addPlayer(userName: string, socket: CoveyTownSocket, spawnLocation?: { x: number; y: number; rotation: string; moving: boolean }): Promise<Player> {
     const newPlayer = new Player(userName, socket.to(this._townID));
+    
+    // Apply spawn location if provided (for cross-town teleportation)
+    if (spawnLocation) {
+      newPlayer.location = {
+        x: spawnLocation.x,
+        y: spawnLocation.y,
+        rotation: spawnLocation.rotation as 'front' | 'back' | 'left' | 'right',
+        moving: spawnLocation.moving,
+      };
+    }
+    
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
@@ -667,20 +680,56 @@ export default class Town {
           return;
         }
 
-        // Notify the requesting player that their request was accepted
+        // Calculate spawn location near the accepting player (same logic as regular teleport)
+        const targetLocation = newPlayer.location;
+        console.log('Cross-town teleport: Accepting player location:', targetLocation);
+        const offset = 60;
+        let spawnX = targetLocation.x;
+        let spawnY = targetLocation.y;
+
+        switch (targetLocation.rotation) {
+          case 'front':
+            spawnY = targetLocation.y + offset;
+            break;
+          case 'back':
+            spawnY = targetLocation.y - offset;
+            break;
+          case 'left':
+            spawnX = targetLocation.x - offset;
+            break;
+          case 'right':
+            spawnX = targetLocation.x + offset;
+            break;
+          default:
+            spawnX = targetLocation.x + offset;
+            spawnY = targetLocation.y + (offset / 2);
+            break;
+        }
+
+        const spawnLocation = {
+          x: spawnX,
+          y: spawnY,
+          rotation: targetLocation.rotation,
+          moving: false,
+        };
+        console.log('Cross-town teleport: Sending spawnLocation to requesting player:', spawnLocation);
+
+        // Notify the requesting player that their request was accepted, include spawn location
+        // They will switch to this town and spawn at the specified location
         requestingSocket.emit('crossTownTeleportResult', {
           success: true,
           accepted: true,
           targetTownID: this._townID,
           targetTownName: this._friendlyName,
+          spawnLocation,
         });
 
-        // Also notify the accepting player (the one who sent the response)
+        // Notify the accepting player that the teleport was successful
+        // Do NOT include targetTownID - they should stay in their current town, not switch!
         socket.emit('crossTownTeleportResult', {
           success: true,
           accepted: true,
-          targetTownID: this._townID,
-          targetTownName: this._friendlyName,
+          // No targetTownID - this prevents the accepting player from switching towns
         });
       } catch (err) {
         logError(err);

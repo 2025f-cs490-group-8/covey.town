@@ -51,7 +51,7 @@ export type ConnectionProperties = {
   userName: string;
   townID: string;
   loginController: LoginController;
-  accountUsername: string; 
+  spawnLocation?: PlayerLocation;
 };
 
 /**
@@ -130,7 +130,7 @@ export type TownEvents = {
   teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
   teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation; cooldownRemaining?: number;}) => void;
   crossTownTeleportRequestReceived: (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
-  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; }) => void;};
+  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; spawnLocation?: PlayerLocation; }) => void;};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -239,26 +239,25 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   private _interactableEmitter = new EventEmitter();
 
-  public constructor({ userName, townID, loginController, accountUsername }: ConnectionProperties) {
-  super();
-  this._townID = townID;
-  this._userName = userName;
-  this._accountUsername = accountUsername; 
-  this._loginController = loginController;
+  public constructor({ userName, townID, loginController, spawnLocation }: ConnectionProperties) {
+    super();
+    this._townID = townID;
+    this._userName = userName;
+    this._loginController = loginController;
 
-  /*
-      The event emitter will show a warning if more than this number of listeners are registered, as it
-      may indicate a leak (listeners that should de-register not de-registering). The default is 10; we expect
-      more than 10 listeners because each conversation area might be its own listener, and there are more than 10
-      */
-  this.setMaxListeners(30);
+    /*
+        The event emitter will show a warning if more than this number of listeners are registered, as it
+        may indicate a leak (listeners that should de-register not de-registering). The default is 10; we expect
+        more than 10 listeners because each conversation area might be its own listener, and there are more than 10
+        */
+    this.setMaxListeners(30);
 
-  const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
-  assert(url);
-  this._socket = io(url, { auth: { userName, townID, accountUsername } });
-  this._townsService = new TownsServiceClient({ BASE: url });
-  this.registerSocketListeners();  
-}
+    const url = 'http://localhost:8081';
+    assert(url);
+    this._socket = io(url, { auth: { userName, townID, spawnLocation } });
+    this._townsService = new TownsServiceClient({ BASE: url });
+      this.registerSocketListeners();  
+  }
   
 
   public get sessionToken() {
