@@ -57,7 +57,7 @@ function App() {
   }
 
   try {
-    const response = await fetch('http://localhost:8081/auth/login', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -140,7 +140,7 @@ function App() {
   }
 
   try {
-    const response = await fetch('http://localhost:8081/auth/register', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -449,7 +449,7 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
-  const googleClientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   
   const appContent = (
     <AppStateProvider>

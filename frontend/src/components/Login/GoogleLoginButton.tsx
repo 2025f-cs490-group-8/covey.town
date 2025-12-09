@@ -16,13 +16,13 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
 
   React.useEffect(() => {
     console.log('🔍 GoogleLoginButton - Client ID:', googleClientId);
-    console.log('🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
-    console.log('🔍 GoogleLoginButton - Redirect URI:', 'http://localhost:3000');
+    console.log('🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.GOOGLE_CLIENT_ID);
+    console.log('🔍 GoogleLoginButton - Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
   }, [googleClientId]);
   
   const googleLogin = useGoogleLogin({
     flow: 'auth-code',
-    redirect_uri: 'http://localhost:3000',   
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,   
     onSuccess: async (codeResponse) => {
       try {
         const url =
