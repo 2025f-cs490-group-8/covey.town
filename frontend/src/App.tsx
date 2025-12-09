@@ -359,7 +359,7 @@ function App() {
     page = <PreJoinScreens accountUsername={accountUsername} />;
   }
   
-  const url = "http://localhost:8081";
+  const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
   assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
   const townsService = new TownsServiceClient({ BASE: url }).towns;
   
@@ -379,7 +379,7 @@ const DEBUG_TOWN_NAME = 'DEBUG_TOWN';
 function DebugApp(): JSX.Element {
   const [townController, setTownController] = useState<TownController | null>(null);
   useEffect(() => {
-    const url = 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
     const townsService = new TownsServiceClient({ BASE: url }).towns;
     async function getOrCreateDebugTownID() {
