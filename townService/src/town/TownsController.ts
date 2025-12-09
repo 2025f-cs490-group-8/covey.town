@@ -403,19 +403,9 @@ export class TownsController extends Controller {
     }));
   }
 
-  /**
-   * Get friend list for the current user
-   * @param townID ID of the town
-   * @param sessionToken session token of the player
-   * @returns list of friends with their statuses and block status
-   * @returns list of friends with their statuses (using account usernames)
-   */
-  @Get('{townID}/friends')
-  @Response<InvalidParametersError>(400, 'Invalid values specified')
   public async getFriends(
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
-  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string; isBlockedByFriend?: boolean }>> {
   ): Promise<
     Array<{
       friendId: string;
@@ -423,6 +413,7 @@ export class TownsController extends Controller {
       friendStatus: string;
       friendTownID?: string;
       friendTownName?: string;
+      isBlockedByFriend?: boolean;
     }>
   > {
     const town = this._townsStore.getTownByID(townID);
@@ -715,12 +706,7 @@ export class TownsController extends Controller {
 
     try {
       // Block the user (removes friendship from blocker's side only)
-      this._friendsStore.blockUser(
-        player.id,
-        player.userName,
-        requestBody.userId,
-        targetUserName,
-      );
+      this._friendsStore.blockUser(player.id, player.userName, requestBody.userId, targetUserName);
 
       // Notify the blocked user that they've been blocked (if they're online)
       // They will still see the blocker in their friends list but with a "blocked" indicator
@@ -750,7 +736,16 @@ export class TownsController extends Controller {
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
     @Body() requestBody: { userId: string },
-  ): Promise<{ friendRestored: boolean; friend?: { friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string } }> {
+  ): Promise<{
+    friendRestored: boolean;
+    friend?: {
+      friendId: string;
+      friendUserName: string;
+      friendStatus: string;
+      friendTownID?: string;
+      friendTownName?: string;
+    };
+  }> {
     const town = this._townsStore.getTownByID(townID);
     if (!town) {
       throw new InvalidParametersError('Invalid values specified');
@@ -776,7 +771,7 @@ export class TownsController extends Controller {
         // Get the friend's current status and town info
         const friendTownID = this._townsStore.getPlayerTown(restoredFriend.friendId);
         const friendTown = friendTownID ? this._townsStore.getTownByID(friendTownID) : undefined;
-        const friendStatus = friendTownID 
+        const friendStatus = friendTownID
           ? this._friendsStore.getUserStatus(restoredFriend.friendId)
           : 'Offline';
 
@@ -864,9 +859,9 @@ export class TownsController extends Controller {
    */
   public async joinTown(socket: CoveyTownSocket) {
     // Parse the client's requested username and optional spawn location from the connection
-    const { userName, townID, spawnLocation } = socket.handshake.auth as { 
-      userName: string; 
-      townID: string; 
+    const { userName, townID, spawnLocation } = socket.handshake.auth as {
+      userName: string;
+      townID: string;
       spawnLocation?: { x: number; y: number; rotation: string; moving: boolean };
     };
 

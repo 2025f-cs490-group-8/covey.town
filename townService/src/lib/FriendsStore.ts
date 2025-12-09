@@ -164,7 +164,7 @@ export default class FriendsStore {
     fromUserName: string,
     toUserId: string,
     toUserName: string,
-  ): FriendRequest {
+  ): Promise<FriendRequest> {
     // Check if either user has blocked the other
     if (this.isBlockedEitherWay(fromUserId, toUserId)) {
       throw new Error('Cannot send friend request to this user');
@@ -174,8 +174,6 @@ export default class FriendsStore {
     if (this.areFriends(fromUserId, toUserId)) {
       throw new Error('Users are already friends');
     }
-  ): Promise<FriendRequest> {
-    if (this.areFriends(fromUserId, toUserId)) throw new Error('Already friends');
 
     const existing = this._getPendingRequest(fromUserId, toUserId);
     if (existing) throw new Error('Already requested');
@@ -192,8 +190,8 @@ export default class FriendsStore {
 
     await pool.execute(
       `INSERT INTO friend_requests 
-      (id, fromUserId, fromUserName, toUserId, toUserName, status, createdAt)
-      VALUES (?, ?, ?, ?, ?, 'pending', NOW())`,
+    (id, fromUserId, fromUserName, toUserId, toUserName, status, createdAt)
+    VALUES (?, ?, ?, ?, ?, 'pending', NOW())`,
       [req.id, req.fromUserId, req.fromUserName, req.toUserId, req.toUserName],
     );
 
@@ -453,7 +451,7 @@ export default class FriendsStore {
     }
 
     const blockRecord = blockedList[blockIndex];
-    
+
     // Remove from blocked list
     blockedList.splice(blockIndex, 1);
 
