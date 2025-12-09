@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { createPool } from 'mysql2/promise';
 
 export interface FriendRequest {
   id: string;
@@ -31,40 +32,134 @@ export interface BlockedUser {
   blockedUserName: string;
   createdAt: Date;
 }
+const pool = createPool({
+  host: process.env.DB_HOST,
+  port: Number(process.env.DB_PORT),
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+});
 
 export default class FriendsStore {
   private static _instance: FriendsStore;
 
-  // Map from userId to their friends
-  private _friends: Map<string, Friend[]> = new Map();
+  private _initialized = false;
 
-  // Map from userId to their pending friend requests (both sent and received)
-  private _friendRequests: Map<string, FriendRequest[]> = new Map();
+  private _friends = new Map<string, Friend[]>();
 
-  // Map from userId to their current status
-  private _userStatuses: Map<string, UserStatus> = new Map();
+  private _friendRequests = new Map<string, FriendRequest[]>();
 
-  // Map from username to their current player ID (for friend migration when switching towns)
-  private _usernameToPlayerId: Map<string, string> = new Map();
+  private _userStatuses = new Map<string, UserStatus>();
+
+  private _usernameToPlayerId = new Map<string, string>();
+
+  // NEW: Maps session player IDs to database user IDs
+  private _sessionToDbUserId = new Map<string, string>();
+
+  // NEW: Maps database user IDs to current session player IDs
+  private _dbUserIdToSession = new Map<string, string>();
 
   // Map from userId to users they have blocked
   private _blockedUsers: Map<string, BlockedUser[]> = new Map();
 
+  /** Singleton */
   static getInstance(): FriendsStore {
-    if (FriendsStore._instance === undefined) {
+    if (!FriendsStore._instance) {
       FriendsStore._instance = new FriendsStore();
     }
     return FriendsStore._instance;
   }
 
-  private constructor() {
-    // Private constructor for singleton
+  /** MUST BE CALLED BEFORE SERVER START */
+  async init() {
+    if (this._initialized) return;
+    await this._loadFromDB();
+    this._initialized = true;
+  }
+
+  private async _loadFromDB() {
+    // Friend requests
+    const [reqRows] = await pool.query(`SELECT * FROM friend_requests ORDER BY createdAt ASC`);
+
+    for (const r of reqRows as any[]) {
+      const req: FriendRequest = {
+        id: r.id,
+        fromUserId: r.fromUserId,
+        fromUserName: r.fromUserName,
+        toUserId: r.toUserId,
+        toUserName: r.toUserName,
+        status: r.status,
+        createdAt: r.createdAt,
+      };
+
+      if (!this._friendRequests.has(r.fromUserId)) this._friendRequests.set(r.fromUserId, []);
+      if (!this._friendRequests.has(r.toUserId)) this._friendRequests.set(r.toUserId, []);
+
+      this._friendRequests.get(r.fromUserId)!.push(req);
+      this._friendRequests.get(r.toUserId)!.push(req);
+    }
+
+    // Friends
+    const [friendRows] = await pool.query(`SELECT * FROM friends`);
+
+    for (const f of friendRows as any[]) {
+      const fr: Friend = {
+        userId: f.userId,
+        userName: f.userName,
+        friendId: f.friendId,
+        friendUserName: f.friendUserName,
+        createdAt: f.createdAt,
+      };
+
+      if (!this._friends.has(f.userId)) this._friends.set(f.userId, []);
+      this._friends.get(f.userId)!.push(fr);
+    }
+
+    console.log('Friends + Requests loaded from DB');
   }
 
   /**
-   * Send a friend request from one user to another
+   * Register a session player ID with their permanent database user ID
    */
-  sendFriendRequest(
+  registerSession(sessionPlayerId: string, databaseUserId: string, username: string) {
+    this._sessionToDbUserId.set(sessionPlayerId, databaseUserId);
+    this._dbUserIdToSession.set(databaseUserId, sessionPlayerId);
+    this._usernameToPlayerId.set(username, sessionPlayerId);
+
+    console.log(
+      `Registered session: ${sessionPlayerId} -> DB User: ${databaseUserId} (${username})`,
+    );
+  }
+
+  /**
+   * Get the database user ID for a session player ID
+   */
+  getDatabaseUserId(sessionPlayerId: string): string {
+    return this._sessionToDbUserId.get(sessionPlayerId) || sessionPlayerId;
+  }
+
+  /**
+   * Get the session player ID for a database user ID
+   */
+  getSessionPlayerId(databaseUserId: string): string | undefined {
+    return this._dbUserIdToSession.get(databaseUserId);
+  }
+
+  /**
+   * Unregister a session (when player disconnects)
+   */
+  unregisterSession(sessionPlayerId: string) {
+    const dbUserId = this._sessionToDbUserId.get(sessionPlayerId);
+    if (dbUserId) {
+      this._dbUserIdToSession.delete(dbUserId);
+    }
+    this._sessionToDbUserId.delete(sessionPlayerId);
+  }
+
+  // ---------------------------------------------
+  // SEND FRIEND REQUEST
+  // ---------------------------------------------
+  async sendFriendRequest(
     fromUserId: string,
     fromUserName: string,
     toUserId: string,
@@ -79,14 +174,13 @@ export default class FriendsStore {
     if (this.areFriends(fromUserId, toUserId)) {
       throw new Error('Users are already friends');
     }
+  ): Promise<FriendRequest> {
+    if (this.areFriends(fromUserId, toUserId)) throw new Error('Already friends');
 
-    // Check if there's already a pending request
-    const existingRequest = this.getPendingRequest(fromUserId, toUserId);
-    if (existingRequest) {
-      throw new Error('Friend request already exists');
-    }
+    const existing = this._getPendingRequest(fromUserId, toUserId);
+    if (existing) throw new Error('Already requested');
 
-    const request: FriendRequest = {
+    const req: FriendRequest = {
       id: nanoid(),
       fromUserId,
       fromUserName,
@@ -96,301 +190,202 @@ export default class FriendsStore {
       createdAt: new Date(),
     };
 
-    // Add to both users' request lists
-    if (!this._friendRequests.has(fromUserId)) {
-      this._friendRequests.set(fromUserId, []);
-    }
-    if (!this._friendRequests.has(toUserId)) {
-      this._friendRequests.set(toUserId, []);
-    }
+    await pool.execute(
+      `INSERT INTO friend_requests 
+      (id, fromUserId, fromUserName, toUserId, toUserName, status, createdAt)
+      VALUES (?, ?, ?, ?, ?, 'pending', NOW())`,
+      [req.id, req.fromUserId, req.fromUserName, req.toUserId, req.toUserName],
+    );
 
-    this._friendRequests.get(fromUserId)!.push(request);
-    this._friendRequests.get(toUserId)!.push(request);
+    // Memory
+    if (!this._friendRequests.has(fromUserId)) this._friendRequests.set(fromUserId, []);
+    if (!this._friendRequests.has(toUserId)) this._friendRequests.set(toUserId, []);
 
-    return request;
+    this._friendRequests.get(fromUserId)!.push(req);
+    this._friendRequests.get(toUserId)!.push(req);
+
+    return req;
   }
 
-  /**
-   * Accept a friend request
-   */
-  acceptFriendRequest(requestId: string, userId: string): Friend {
-    const request = this.findRequest(requestId);
-    if (!request) {
-      throw new Error('Friend request not found');
-    }
+  async acceptFriendRequest(requestId: string, userId: string): Promise<Friend> {
+    const req = this._findRequest(requestId);
+    if (!req) throw new Error('Not found');
+    if (req.toUserId !== userId) throw new Error('Not recipient');
 
-    // Verify the user is the recipient
-    if (request.toUserId !== userId) {
-      throw new Error('User is not the recipient of this request');
-    }
+    req.status = 'accepted';
 
-    if (request.status !== 'pending') {
-      throw new Error('Friend request is not pending');
-    }
+    await pool.execute(`UPDATE friend_requests SET status='accepted' WHERE id=?`, [requestId]);
 
-    // Update request status
-    request.status = 'accepted';
+    const now = new Date();
 
-    // Add to both users' friend lists
-    const friend1: Friend = {
-      userId: request.fromUserId,
-      userName: request.fromUserName,
-      friendId: request.toUserId,
-      friendUserName: request.toUserName,
-      createdAt: new Date(),
+    // SAVE FRIEND BOTH DIRECTIONS
+    await pool.execute(
+      `INSERT INTO friends (userId, userName, friendId, friendUserName, createdAt)
+       VALUES 
+       (?, ?, ?, ?, NOW()),
+       (?, ?, ?, ?, NOW())`,
+      [
+        req.fromUserId,
+        req.fromUserName,
+        req.toUserId,
+        req.toUserName,
+        req.toUserId,
+        req.toUserName,
+        req.fromUserId,
+        req.fromUserName,
+      ],
+    );
+
+    // Update memory
+    const f1: Friend = {
+      userId: req.fromUserId,
+      userName: req.fromUserName,
+      friendId: req.toUserId,
+      friendUserName: req.toUserName,
+      createdAt: now,
     };
 
-    const friend2: Friend = {
-      userId: request.toUserId,
-      userName: request.toUserName,
-      friendId: request.fromUserId,
-      friendUserName: request.fromUserName,
-      createdAt: new Date(),
+    const f2: Friend = {
+      userId: req.toUserId,
+      userName: req.toUserName,
+      friendId: req.fromUserId,
+      friendUserName: req.fromUserName,
+      createdAt: now,
     };
 
-    if (!this._friends.has(request.fromUserId)) {
-      this._friends.set(request.fromUserId, []);
-    }
-    if (!this._friends.has(request.toUserId)) {
-      this._friends.set(request.toUserId, []);
-    }
+    if (!this._friends.has(req.fromUserId)) this._friends.set(req.fromUserId, []);
+    if (!this._friends.has(req.toUserId)) this._friends.set(req.toUserId, []);
 
-    this._friends.get(request.fromUserId)!.push(friend1);
-    this._friends.get(request.toUserId)!.push(friend2);
+    this._friends.get(req.fromUserId)!.push(f1);
+    this._friends.get(req.toUserId)!.push(f2);
 
-    return friend2; // Return the friend from the perspective of the accepter
+    return f2;
   }
 
-  /**
-   * Decline a friend request
-   */
-  declineFriendRequest(requestId: string, userId: string): void {
-    const request = this.findRequest(requestId);
-    if (!request) {
-      throw new Error('Friend request not found');
-    }
+  async declineFriendRequest(requestId: string, userId: string): Promise<void> {
+    const req = this._findRequest(requestId);
+    if (!req) throw new Error('Not found');
+    if (req.toUserId !== userId) throw new Error('Not recipient');
 
-    // Verify the user is the recipient
-    if (request.toUserId !== userId) {
-      throw new Error('User is not the recipient of this request');
-    }
-
-    if (request.status !== 'pending') {
-      throw new Error('Friend request is not pending');
-    }
-
-    request.status = 'declined';
+    req.status = 'declined';
+    await pool.execute(`UPDATE friend_requests SET status='declined' WHERE id=?`, [requestId]);
   }
 
-  /**
-   * Get all pending friend requests for a user (both sent and received)
-   */
-  getFriendRequests(userId: string): FriendRequest[] {
-    return this._friendRequests.get(userId) || [];
-  }
+  async removeFriend(userId: string, friendId: string): Promise<void> {
+    await pool.execute(
+      `DELETE FROM friends WHERE 
+       (userId = ? AND friendId = ?) OR 
+       (userId = ? AND friendId = ?)`,
+      [userId, friendId, friendId, userId],
+    );
 
-  /**
-   * Get pending friend requests received by a user
-   */
-  getReceivedFriendRequests(userId: string): FriendRequest[] {
-    return this.getFriendRequests(userId).filter(
-      req => req.toUserId === userId && req.status === 'pending',
+    // Update memory
+    const userFriends = this._friends.get(userId) || [];
+    this._friends.set(
+      userId,
+      userFriends.filter(f => f.friendId !== friendId),
+    );
+
+    const friendFriends = this._friends.get(friendId) || [];
+    this._friends.set(
+      friendId,
+      friendFriends.filter(f => f.friendId !== userId),
     );
   }
 
-  /**
-   * Get pending friend requests sent by a user
-   */
-  getSentFriendRequests(userId: string): FriendRequest[] {
-    return this.getFriendRequests(userId).filter(
-      req => req.fromUserId === userId && req.status === 'pending',
+  // ---------------------------------------------
+  // BASIC GETTERS (now use database IDs internally)
+  // ---------------------------------------------
+  getFriendRequests(sessionOrDbId: string) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this._friendRequests.get(dbId) || [];
+  }
+
+  getReceivedFriendRequests(sessionOrDbId: string) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this.getFriendRequests(dbId).filter(r => r.toUserId === dbId && r.status === 'pending');
+  }
+
+  getSentFriendRequests(sessionOrDbId: string) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this.getFriendRequests(dbId).filter(
+      r => r.fromUserId === dbId && r.status === 'pending',
     );
   }
 
-  /**
-   * Get all friends of a user
-   */
-  getFriends(userId: string): Friend[] {
-    return this._friends.get(userId) || [];
+  getFriends(sessionOrDbId: string) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this._friends.get(dbId) || [];
   }
 
-  /**
-   * Set user status
-   */
-  setUserStatus(userId: string, status: UserStatus): void {
-    this._userStatuses.set(userId, status);
+  areFriends(a: string, b: string) {
+    const dbIdA = this.getDatabaseUserId(a);
+    const dbIdB = this.getDatabaseUserId(b);
+    return this.getFriends(dbIdA).some(x => x.friendId === dbIdB);
   }
 
-  /**
-   * Get user status (defaults to 'Offline' if not set)
-   */
-  getUserStatus(userId: string): UserStatus {
-    return this._userStatuses.get(userId) || 'Offline';
-  }
-
-  /**
-   * Get friends with their current statuses
-   */
-  getFriendsWithStatus(userId: string): Array<Friend & { friendStatus: UserStatus }> {
-    const friends = this.getFriends(userId);
-    return friends.map(friend => ({
-      ...friend,
-      friendStatus: this.getUserStatus(friend.friendId),
-    }));
-  }
-
-  /**
-   * Check if two users are friends
-   */
-  areFriends(userId1: string, userId2: string): boolean {
-    const friends = this.getFriends(userId1);
-    return friends.some(friend => friend.friendId === userId2);
-  }
-
-  /**
-   * Remove a friend
-   */
-  removeFriend(userId: string, friendId: string): void {
-    const friends = this._friends.get(userId);
-    if (friends) {
-      this._friends.set(
-        userId,
-        friends.filter(f => f.friendId !== friendId),
-      );
-    }
-
-    // Also remove from the other user's list
-    const otherFriends = this._friends.get(friendId);
-    if (otherFriends) {
-      this._friends.set(
-        friendId,
-        otherFriends.filter(f => f.friendId !== userId),
-      );
-    }
-  }
-
-  /**
-   * Find a friend request by ID
-   */
-  private findRequest(requestId: string): FriendRequest | undefined {
-    for (const requests of this._friendRequests.values()) {
-      const request = requests.find(r => r.id === requestId);
-      if (request) {
-        return request;
-      }
+  private _findRequest(id: string) {
+    for (const list of this._friendRequests.values()) {
+      const req = list.find(r => r.id === id);
+      if (req) return req;
     }
     return undefined;
   }
 
-  /**
-   * Get a pending request between two users
-   */
-  private getPendingRequest(userId1: string, userId2: string): FriendRequest | undefined {
-    const requests = this.getFriendRequests(userId1);
-    return requests.find(
-      req =>
-        req.status === 'pending' &&
-        ((req.fromUserId === userId1 && req.toUserId === userId2) ||
-          (req.fromUserId === userId2 && req.toUserId === userId1)),
+  private _getPendingRequest(a: string, b: string) {
+    return this.getFriendRequests(a).find(
+      r =>
+        r.status === 'pending' &&
+        ((r.fromUserId === a && r.toUserId === b) || (r.fromUserId === b && r.toUserId === a)),
     );
   }
 
-  /**
-   * Migrate friends from an old player ID to a new player ID
-   * This is used when a player switches towns and gets a new player ID
-   * @param oldPlayerId The old player ID
-   * @param newPlayerId The new player ID
-   * @param userName The username (for verification)
-   */
-  migratePlayerFriends(oldPlayerId: string, newPlayerId: string, userName: string): void {
-    // Always update the username to player ID mapping
-    this._usernameToPlayerId.set(userName, newPlayerId);
-    
-    if (oldPlayerId === newPlayerId) {
-      return; // No migration needed (just updating the mapping)
-    }
-
-    // Migrate friends
-    const oldFriends = this._friends.get(oldPlayerId);
-    if (oldFriends && oldFriends.length > 0) {
-      // Verify that the old friends belong to the same username
-      const validFriends = oldFriends.filter(f => f.userName === userName);
-      if (validFriends.length > 0) {
-        // Set friends for new player ID (merge with existing if any)
-        if (!this._friends.has(newPlayerId)) {
-          this._friends.set(newPlayerId, []);
-        }
-        const newPlayerFriends = this._friends.get(newPlayerId)!;
-        
-        // Add friends that don't already exist
-        validFriends.forEach(oldFriend => {
-          const migratedFriend = {
-            ...oldFriend,
-            userId: newPlayerId,
-          };
-          
-          // Check if this friend already exists (by friendId)
-          if (!newPlayerFriends.some(f => f.friendId === migratedFriend.friendId)) {
-            newPlayerFriends.push(migratedFriend);
-          }
-        });
-        
-        // Update friend references in other players' friend lists
-        validFriends.forEach(friend => {
-          const otherPlayerFriends = this._friends.get(friend.friendId);
-          if (otherPlayerFriends) {
-            const friendIndex = otherPlayerFriends.findIndex(f => f.friendId === oldPlayerId);
-            if (friendIndex !== -1) {
-              // Update to point to new player ID
-              otherPlayerFriends[friendIndex] = {
-                ...otherPlayerFriends[friendIndex],
-                friendId: newPlayerId,
-              };
-            }
-          }
-        });
-      }
-    }
-
-    // Migrate friend requests
-    const oldRequests = this._friendRequests.get(oldPlayerId);
-    if (oldRequests && oldRequests.length > 0) {
-      if (!this._friendRequests.has(newPlayerId)) {
-        this._friendRequests.set(newPlayerId, []);
-      }
-      const newPlayerRequests = this._friendRequests.get(newPlayerId)!;
-      
-      oldRequests.forEach(request => {
-        // Update the request to use new player ID
-        if (request.fromUserId === oldPlayerId) {
-          request.fromUserId = newPlayerId;
-        }
-        if (request.toUserId === oldPlayerId) {
-          request.toUserId = newPlayerId;
-        }
-        
-        // Add to new player's requests if not already there
-        const existingRequest = newPlayerRequests.find(r => r.id === request.id);
-        if (!existingRequest) {
-          newPlayerRequests.push(request);
-        }
-      });
-    }
-
-    // Migrate user status
-    const oldStatus = this._userStatuses.get(oldPlayerId);
-    if (oldStatus) {
-      this._userStatuses.set(newPlayerId, oldStatus);
-    }
+  // ---------------------------------------------
+  // STATUS TRACKING (now uses database IDs)
+  // ---------------------------------------------
+  setUserStatus(sessionOrDbId: string, status: UserStatus) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    this._userStatuses.set(dbId, status);
   }
 
-  /**
-   * Get the current player ID for a username
-   * @param userName The username
-   * @returns The current player ID, or undefined if not found
-   */
-  getPlayerIdForUsername(userName: string): string | undefined {
-    return this._usernameToPlayerId.get(userName);
+  getUserStatus(sessionOrDbId: string): UserStatus {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this._userStatuses.get(dbId) || 'Offline';
+  }
+
+  getFriendsWithStatus(sessionOrDbId: string) {
+    const dbId = this.getDatabaseUserId(sessionOrDbId);
+    return this.getFriends(dbId).map(f => ({
+      ...f,
+      friendStatus: this.getUserStatus(f.friendId),
+    }));
+  }
+
+  // ---------------------------------------------
+  // MIGRATION SUPPORT (deprecated but kept for compatibility)
+  // ---------------------------------------------
+  migratePlayerFriends(oldId: string, newId: string, username: string) {
+    this._usernameToPlayerId.set(username, newId);
+
+    if (oldId === newId) return;
+
+    const oldList = this._friends.get(oldId) || [];
+    const newList = this._friends.get(newId) || [];
+
+    for (const f of oldList) {
+      if (!newList.some(x => x.friendId === f.friendId)) {
+        newList.push({ ...f, userId: newId });
+      }
+    }
+
+    this._friends.set(newId, newList);
+
+    const oldStatus = this._userStatuses.get(oldId);
+    if (oldStatus) this._userStatuses.set(newId, oldStatus);
+  }
+
+  getPlayerIdForUsername(name: string) {
+    return this._usernameToPlayerId.get(name);
   }
 
   /**

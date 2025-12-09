@@ -14,8 +14,9 @@ import TownsStore from './lib/TownsStore';
 import { ClientToServerEvents, ServerToClientEvents } from './types/CoveyTownSocket';
 import { TownsController } from './town/TownsController';
 import { logError } from './Utils';
-import InvalidParametersError from './lib/InvalidParametersError';
+import FriendsStore from './lib/FriendsStore';
 
+await FriendsStore.getInstance().init();
 const FILENAME = fileURLToPath(import.meta.url);
 const DIRNAME = path.dirname(FILENAME);
 
@@ -70,16 +71,10 @@ app.use(
         details: err?.fields,
       });
     }
-    if (err instanceof InvalidParametersError) {
-      return res.status(400).json({
-        message: err.message,
-      });
-    }
     if (err instanceof Error) {
       logError(err);
       return res.status(500).json({
         message: 'Internal Server Error',
-        details: process.env.NODE_ENV === 'development' ? err.message : undefined,
       });
     }
 

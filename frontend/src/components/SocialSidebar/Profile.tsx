@@ -355,12 +355,27 @@ useEffect(() => {
     };
 
     // Listen for user status updates from friends
-    const handleStatusUpdate = (statusUpdate: { userId: string; userName: string; status: string }) => {
-      setFriends(prev => prev.map(friend =>
-        friend.friendId === statusUpdate.userId
-          ? { ...friend, friendStatus: statusUpdate.status as UserStatus }
-          : friend
-      ));
+    const handleStatusUpdate = (statusUpdate: any) => {
+      setFriends(prev => prev.map(friend => {
+        const matches =
+          friend.friendId === statusUpdate.userId ||
+          friend.friendUserName === statusUpdate.userName;
+        if (!matches) return friend;
+        if (statusUpdate.status === 'Offline') {
+          return {
+            ...friend,
+            friendStatus: 'Offline',
+            friendTownID: undefined,
+            friendTownName: undefined,
+          };
+        }
+        return {
+          ...friend,
+          friendStatus: (statusUpdate.status as UserStatus) || friend.friendStatus,
+          friendTownID: statusUpdate.friendTownID ?? statusUpdate.townID ?? friend.friendTownID,
+          friendTownName: statusUpdate.friendTownName ?? statusUpdate.townName ?? friend.friendTownName,
+        };
+      }));
     };
 
     // Listen for friend removed events
@@ -541,6 +556,8 @@ useEffect(() => {
     });
   }
 };
+
+
 
 const handleDeclineTeleport = async () => {
   if (!incomingTeleport) return;
@@ -851,6 +868,29 @@ const handleDeclineCrossTownTeleport = async () => {
       setSendingRequestTo(null);
     }
   };
+  
+  const handleLogout = () => {
+    // Clear localStorage
+    localStorage.removeItem('accountUsername');
+    localStorage.removeItem('googleUser');
+    
+    // Disconnect from town
+    if (townController) {
+      townController.disconnect();
+    }
+      toast({
+      title: 'Logged Out',
+      description: 'Redirecting to login...',
+      status: 'info',
+      duration: 2000,
+    });
+    
+    // Reload page to go back to login
+    setTimeout(() => {
+      window.location.href = '/';
+    }, 500);
+  };
+
 
   return (
     
@@ -1085,6 +1125,8 @@ const handleDeclineCrossTownTeleport = async () => {
             />
           </InputGroup>
 
+
+        
           {/* Error Message */}
           {error && (
             <Alert status="error" mb={4}>
@@ -1093,7 +1135,7 @@ const handleDeclineCrossTownTeleport = async () => {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
+          
           {/* Friends List */}
           {loading ? (
             <Text color="gray.500" textAlign="center" py={4}>
@@ -1198,6 +1240,17 @@ const handleDeclineCrossTownTeleport = async () => {
             </VStack>
           )}
         </Box>
+         {/* Logout */}
+          <Button
+              leftIcon={<ArrowBackIcon/>}
+              onClick={handleLogout}
+              colorScheme="red"
+              variant="ghost"
+              width="100%"
+              mt={4}
+            >
+          Logout
+        </Button>
 
         <Divider />
 

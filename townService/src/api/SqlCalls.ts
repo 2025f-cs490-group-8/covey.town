@@ -10,8 +10,6 @@ const FILENAME = fileURLToPath(import.meta.url);
 const DIRNAME = path.dirname(FILENAME);
 dotenv.config({ path: path.resolve(DIRNAME, '../../.env') });
 
-
-
 console.log('MYSQL CONNECTING WITH:', {
   host: process.env.DB_HOST,
   port: process.env.DB_PORT,
@@ -30,11 +28,11 @@ async function constructBCRYPTHash(password: string) {
  * It should only fail if .env isn't properly configured
  */
 export const connection = createPool({
-  host: process.env.DB_HOST || 'covey-town.c1e4guig85zc.us-east-2.rds.amazonaws.com',
+  host: process.env.DB_HOST,
   port: parseInt(process.env.DB_PORT || '3306', 10),
-  user: process.env.DB_USER || 'admin',
-  password: process.env.DB_PASSWORD || 'epicgamer12',
-  database: process.env.DB_NAME || 'COVEYTOWN',
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
 });
 
 process.on('SIGTERM', () => {
@@ -75,8 +73,8 @@ export class QuerySQL {
 
   async passwordChallenge(userPassword: string, uid: number) {
     const hashRequest = await this.getUserHash(uid);
-      if (!hashRequest) {
-    return false;
+    if (!hashRequest) {
+      return false;
     }
     const storedHash = hashRequest.hash;
     const match = await bcrypt.compare(userPassword, storedHash);
@@ -217,7 +215,5 @@ export class QuerySQL {
       console.error('Error unblocking user:', error);
       throw error;
     }
-    
   }
-  
 }
