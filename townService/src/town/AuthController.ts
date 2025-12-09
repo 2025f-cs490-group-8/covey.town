@@ -26,7 +26,7 @@ export class AuthController extends Controller {
     const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
     // Google only accepts HTTP on localhost — NOT HTTPS
     // IMPORTANT: This redirect URI MUST match exactly what's configured in Google Cloud Console
-    const redirectUri = 'http://localhost:3000';
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
     console.log('Google OAuth Configuration:', {
       clientId: googleClientId,
@@ -166,7 +166,7 @@ public async register(
 
       if (requestBody.code) {
         // The redirect_uri MUST match exactly what was used in the frontend authorization request
-        const redirectUri = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000';
+        const redirectUri = process.env.GOOGLE_REDIRECT_URI;
         console.log('Exchanging code for tokens with redirect_uri:', redirectUri);
 
         const { tokens } = await this._googleClient.getToken({
@@ -186,7 +186,7 @@ public async register(
       }
 
       // Use the same client ID that was used to initialize the OAuth2Client
-      const clientId = '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
+      const clientId = process.env.GOOGLE_CLIENT_ID;
       const ticket = await this._googleClient.verifyIdToken({
         idToken,
         audience: clientId,
@@ -234,9 +234,9 @@ public async register(
           console.error('Invalid client details:', {
             code: errorObj.code,
             message: errorObj.message,
-            clientId: '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com',
+            clientId: process.env.GOOGLE_CLIENT_ID,
             hasSecret: !!process.env.GOOGLE_CLIENT_SECRET,
-            redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000',
+            redirectUri: process.env.GOOGLE_REDIRECT_URI,
           });
         } else if (errorObj.message) {
           errorMessage = errorObj.message;
