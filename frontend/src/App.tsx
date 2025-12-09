@@ -34,6 +34,7 @@ function App() {
   const [password, setPassword] = useState<string>('');
   const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [email, setEmail] = useState<string>('');
+  const [accountUsername, setAccountUsername] = useState<string>(''); // Store the account username
   const { error, setError } = useAppState();
   const connectionOptions = useConnectionOptions();
   const toast = useToast() as any;
@@ -44,7 +45,7 @@ function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
-
+  
   if (!username || !password) {
     toast({
       title: 'Error',
@@ -56,45 +57,62 @@ function App() {
   }
 
   try {
-    const res = await fetch('http://localhost:8081/auth/login', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username,
+        password,
+      }),
     });
 
-    if (!res.ok) {
-      throw new Error('Invalid username or password');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Login failed');
     }
+    console.log('Login successful, setting accountUsername to:', data.accountUsername);
 
-    const data = await res.json();
-
-    // Save user session info
-    localStorage.setItem('authUser', JSON.stringify(data));
-
+    // Store the account username for later use
+    setAccountUsername(data.accountUsername);
     setIsAuthenticated(true);
-
+    localStorage.setItem('accountUsername', data.accountUsername);
+    
     toast({
       title: 'Success',
-      description: `Welcome, ${data.name}!`,
+      description: 'Logged in successfully',
       status: 'success',
       duration: 2000,
     });
-  } catch (err) {
+  } catch (error) {
     toast({
-      title: 'Login failed',
-      description: err.message,
+      title: 'Login Failed',
+      description: error instanceof Error ? error.message : 'Invalid credentials',
       status: 'error',
       duration: 3000,
     });
   }
 };
-const handleRegister = async (e: React.FormEvent) => {
-  e.preventDefault();
 
+  const handleRegister = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
   if (!username || !email || !password || !confirmPassword) {
     toast({
       title: 'Error',
       description: 'Please fill in all fields',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
+  if (username.includes(" ")){
+    toast({
+      title: 'Error',
+      description: 'Username can not include space',
       status: 'error',
       duration: 3000,
     });
@@ -111,42 +129,63 @@ const handleRegister = async (e: React.FormEvent) => {
     return;
   }
 
+  if (password.length < 6) {
+    toast({
+      title: 'Error',
+      description: 'Password must be at least 6 characters',
+      status: 'error',
+      duration: 3000,
+    });
+    return;
+  }
+
   try {
-    const res = await fetch('http://localhost:8081/auth/register', {
+    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        username,
+        email,
+        password,
+      }),
     });
 
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({ message: 'Registration failed' }));
-      throw new Error(errorData.message || `Registration failed: ${res.status} ${res.statusText}`);
-    }
+    const data = await response.json();
 
-    const data = await res.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Registration failed');
+    }
 
     toast({
       title: 'Success',
-      description: data.message || 'Account created successfully! Please log in.',
+      description: 'Account created! Please log in.',
       status: 'success',
       duration: 3000,
     });
-
-    // Switch back to login view
+    
     setShowRegister(false);
+    setUsername('');
     setPassword('');
     setConfirmPassword('');
-
-  } catch (err: any) {
+    setEmail('');
+  } catch (error) {
     toast({
-      title: 'Error creating account',
-      description: err.message || 'An unexpected error occurred',
+      title: 'Registration Failed',
+      description: error instanceof Error ? error.message : 'Could not create account',
       status: 'error',
       duration: 3000,
     });
   }
 };
-
+  useEffect(() => {
+    const savedUser = localStorage.getItem('accountUsername');
+    const googleUser = localStorage.getItem('googleUser');
+    //Force login screen by clearing old values
+    localStorage.removeItem('accountUsername');
+    localStorage.removeItem('googleUser');
+  }, []);
   if (!isAuthenticated) {
     return (
       <Box 
@@ -164,73 +203,75 @@ const handleRegister = async (e: React.FormEvent) => {
           boxShadow="2xl"
           bg="white"
         >
-    {!showRegister ? (
-  <form onSubmit={handleLogin} style={{ width: '100%' }}>
-    <VStack spacing={6}>
-      <Heading size="lg" color="gray.800">Login to Covey.Town</Heading>
-      
-      <FormControl isRequired>
-        <FormLabel>Username</FormLabel>
-        <Input
-          type="text"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          placeholder="Enter username"
-        />
-      </FormControl>
+          {!showRegister ? (
+            <form onSubmit={handleLogin} style={{ width: '100%' }}>
+              <VStack spacing={6}>
+                <Heading size="lg" color="gray.800">Login to Covey.Town</Heading>
+                
+                <FormControl isRequired>
+                  <FormLabel>Username</FormLabel>
+                  <Input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
+                  />
+                </FormControl>
 
-      <FormControl isRequired>
-        <FormLabel>Password</FormLabel>
-        <Input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="Enter password"
-        />
-      </FormControl>
+                <FormControl isRequired>
+                  <FormLabel>Password</FormLabel>
+                  <Input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                  />
+                </FormControl>
 
-      <Button type="submit" colorScheme="blue" width="100%">
-        Login
-      </Button>
+                <Button type="submit" colorScheme="blue" width="100%">
+                  Login
+                </Button>
 
-      {/* Always show Google login section - button will handle its own visibility */}
-      <HStack width="100%" spacing={2}>
-        <Divider />
-        <Text fontSize="sm" color="gray.500">OR</Text>
-        <Divider />
-      </HStack>
+                <HStack width="100%" spacing={2}>
+                  <Divider />
+                  <Text fontSize="sm" color="gray.500">OR</Text>
+                  <Divider />
+                </HStack>
 
-      <GoogleLoginButton
-        onSuccess={(userInfo) => {
-          setIsAuthenticated(true);
-          // Store user info for later use (e.g., for town joining)
-          localStorage.setItem('googleUser', JSON.stringify(userInfo));
-          toast({
-            title: 'Success',
-            description: `Welcome, ${userInfo.name}!`,
-            status: 'success',
-            duration: 2000,
-          });
-        }}
-      />
+                <GoogleLoginButton
+                  onSuccess={(userInfo) => {
+                    // Store the Google email as the account username
+                    setAccountUsername(userInfo.email);
+                    setIsAuthenticated(true);
+                    // Store user info for later use
+                    localStorage.setItem('googleUser', JSON.stringify(userInfo));
+                    localStorage.setItem('accountUsername', userInfo.email);
+                    toast({
+                      title: 'Success',
+                      description: `Welcome, ${userInfo.name}!`,
+                      status: 'success',
+                      duration: 2000,
+                    });
+                  }}
+                />
 
-      <Text fontSize="sm" color="gray.600">
-        Don't have an account?{' '}
-        <Button
-          variant="link"
-          colorScheme="blue"
-          onClick={() => {
-            setShowRegister(true);
-            setUsername('');
-            setPassword('');
-          }}
-        >
-          Register here
-        </Button>
-      </Text>
-    </VStack>
-  </form>
-) : (
+                <Text fontSize="sm" color="gray.600">
+                  Don't have an account?{' '}
+                  <Button
+                    variant="link"
+                    colorScheme="blue"
+                    onClick={() => {
+                      setShowRegister(true);
+                      setUsername('');
+                      setPassword('');
+                    }}
+                  >
+                    Register here
+                  </Button>
+                </Text>
+              </VStack>
+            </form>
+          ) : (
             <form onSubmit={handleRegister}>
               <VStack spacing="6">
                 <Heading size="lg" color="gray.800">Create Account</Heading>
@@ -303,26 +344,27 @@ const handleRegister = async (e: React.FormEvent) => {
     );
   }
 
-let page: JSX.Element;
-if (townController) {
-  page = (
-    <TownControllerContext.Provider value={townController}>
-      <ChatProvider>
-        <TownMap />
-        <VideoOverlay preferredMode='fullwidth' />
-      </ChatProvider>
-    </TownControllerContext.Provider>
-  );
-} else {
-  page = <PreJoinScreens />;
-}
+  let page: JSX.Element;
+  if (townController) {
+    page = (
+      <TownControllerContext.Provider value={townController}>
+        <ChatProvider>
+          <TownMap />
+          <VideoOverlay preferredMode='fullwidth' />
+        </ChatProvider>
+      </TownControllerContext.Provider>
+    );
+  } else {
+    // Pass the account username to PreJoinScreens
+    page = <PreJoinScreens accountUsername={accountUsername} />;
+  }
   
-  const url = "http://localhost:8081";
+  const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
   assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
   const townsService = new TownsServiceClient({ BASE: url }).towns;
   
   return (
-    <LoginControllerContext.Provider value={{ setTownController, townsService }}>
+    <LoginControllerContext.Provider value={{ setTownController, townsService, accountUsername }}>
       <UnsupportedBrowserWarning>
         <VideoProvider options={connectionOptions} onError={setError} onDisconnect={onDisconnect}>
           <ErrorDialog dismissError={() => setError(null)} error={error} />
@@ -337,7 +379,7 @@ const DEBUG_TOWN_NAME = 'DEBUG_TOWN';
 function DebugApp(): JSX.Element {
   const [townController, setTownController] = useState<TownController | null>(null);
   useEffect(() => {
-    const url = 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
     const townsService = new TownsServiceClient({ BASE: url }).towns;
     async function getOrCreateDebugTownID() {
@@ -367,13 +409,16 @@ function DebugApp(): JSX.Element {
     }
     getOrCreateDebugTownID().then(townID => {
       assert(townID);
+      const debugUsername = nanoid();
       const newTownController = new TownController({
         townID,
         loginController: {
           setTownController: () => {},
           townsService,
+          accountUsername: debugUsername,  // Use same value for debug mode
         },
-        userName: nanoid(),
+        userName: debugUsername,
+        accountUsername: debugUsername, // Pass account username
       });
       newTownController.connect().then(() => {
         setTownController(newTownController);
@@ -394,8 +439,6 @@ function DebugApp(): JSX.Element {
   }
 }
 
-
-
 function AppOrDebugApp(): JSX.Element {
   const debugTown = false;
   if (debugTown) {
@@ -406,12 +449,7 @@ function AppOrDebugApp(): JSX.Element {
 }
 
 export default function AppStateWrapper(): JSX.Element {
-  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '850515244022-u8td0lf0jpqfu1as1457aaelb9tt6hrd.apps.googleusercontent.com';
-  
-  React.useEffect(() => {
-    console.log('🔍 GoogleOAuthProvider Client ID:', googleClientId);
-    console.log('🔍 NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
-  }, [googleClientId]);
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   
   const appContent = (
     <AppStateProvider>
@@ -419,8 +457,6 @@ export default function AppStateWrapper(): JSX.Element {
     </AppStateProvider>
   );
   
-  // Always wrap with GoogleOAuthProvider to prevent hook errors
-  // Use a dummy client ID if not configured - GoogleLoginButton will handle showing disabled state
   return (
     <BrowserRouter>
       <ChakraProvider>

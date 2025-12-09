@@ -264,14 +264,15 @@ export default class Town {
             socket.emit('teleportResult', {
               success: false,
               accepted: false,
-              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(
+                cooldownRemaining / 1000,
+              )} seconds.`,
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
-          } else {
-            // Cooldown has expired, remove it from the map to clean up
-            this._teleportCooldowns.delete(newPlayer.id);
           }
+          // Cooldown has expired, remove it from the map to clean up
+          this._teleportCooldowns.delete(newPlayer.id);
         }
 
         const targetPlayer = this._players.find(p => p.id === data.toUserId);
@@ -300,8 +301,9 @@ export default class Town {
         // Check if players are friends (required for teleportation)
         // Check both directions to ensure friendship is bidirectional
         const friendsStore = FriendsStore.getInstance();
-        const areFriends = friendsStore.areFriends(newPlayer.id, targetPlayer.id) || 
-                          friendsStore.areFriends(targetPlayer.id, newPlayer.id);
+        const areFriends =
+          friendsStore.areFriends(newPlayer.id, targetPlayer.id) ||
+          friendsStore.areFriends(targetPlayer.id, newPlayer.id);
         if (!areFriends) {
           socket.emit('teleportResult', {
             success: false,
@@ -318,7 +320,9 @@ export default class Town {
           socket.emit('teleportResult', {
             success: false,
             accepted: false,
-            reason: `Cannot teleport to ${targetPlayer.userName}. They are currently ${targetStatus.toLowerCase()}.`,
+            reason: `Cannot teleport to ${
+              targetPlayer.userName
+            }. They are currently ${targetStatus.toLowerCase()}.`,
             cooldownRemaining: 0,
           });
           return;
@@ -352,7 +356,7 @@ export default class Town {
           fromUserId: newPlayer.id,
           fromUserName: newPlayer.userName,
         });
-        
+
         // Also send a success result to the requesting player (request was sent)
         socket.emit('teleportResult', {
           success: true,
@@ -412,49 +416,17 @@ export default class Town {
           return;
         }
 
-        // Teleport the requesting player next to the accepting player
-        // Place them adjacent to the target player based on their rotation
-        // IMPORTANT: Offset must be less than 80 pixels to trigger video/voice proximity system
+        // Teleport the requesting player to the accepting player
         const targetLocation = newPlayer.location;
-        // Use an offset of 60 pixels (within the 80 pixel proximity threshold for video/voice)
-        // This ensures players are close enough to see/hear each other after teleportation
-        const offset = 60;
-        let teleportX = targetLocation.x;
-        let teleportY = targetLocation.y;
-
-        // Calculate position based on target's rotation
-        // In Phaser/top-down games, 'front' typically means facing down (positive Y)
-        switch (targetLocation.rotation) {
-          case 'front':
-            teleportY = targetLocation.y + offset; // In front (below the target)
-            break;
-          case 'back':
-            teleportY = targetLocation.y - offset; // Behind (above the target)
-            break;
-          case 'left':
-            teleportX = targetLocation.x - offset; // To the left of the target
-            break;
-          case 'right':
-            teleportX = targetLocation.x + offset; // To the right of the target
-            break;
-          default:
-            // Default: place to the right and slightly down (diagonal)
-            teleportX = targetLocation.x + offset;
-            teleportY = targetLocation.y + (offset / 2);
-            break;
-        }
 
         // Create a new location object to ensure we're not modifying the target's location
         const teleportLocation: PlayerLocation = {
-          x: teleportX,
-          y: teleportY,
+          x: targetLocation.x,
+          y: targetLocation.y,
           rotation: targetLocation.rotation,
           moving: false,
           interactableID: targetLocation.interactableID,
         };
-
-        // Log for debugging (can be removed later)
-        console.log(`Teleporting player ${requestingPlayer.userName} (${requestingPlayer.id}) from (${requestingPlayer.location.x}, ${requestingPlayer.location.y}) to (${teleportX}, ${teleportY}) next to ${newPlayer.userName} (${newPlayer.id}) at (${targetLocation.x}, ${targetLocation.y})`);
 
         // Update the requesting player's location
         // This will automatically broadcast the playerMoved event to all clients via _broadcastEmitter
@@ -517,20 +489,22 @@ export default class Town {
             socket.emit('crossTownTeleportResult', {
               success: false,
               accepted: false,
-              reason: `Teleport is on cooldown. Please wait ${Math.ceil(cooldownRemaining / 1000)} seconds.`,
+              reason: `Teleport is on cooldown. Please wait ${Math.ceil(
+                cooldownRemaining / 1000,
+              )} seconds.`,
               cooldownRemaining: Math.ceil(cooldownRemaining / 1000),
             });
             return;
-          } else {
-            // Cooldown has expired, remove it from the map to clean up
-            this._teleportCooldowns.delete(newPlayer.id);
           }
+          // Cooldown has expired, remove it from the map to clean up
+          this._teleportCooldowns.delete(newPlayer.id);
         }
 
         // Check if players are friends
         const friendsStore = FriendsStore.getInstance();
-        const areFriends = friendsStore.areFriends(newPlayer.id, data.toUserId) ||
-                          friendsStore.areFriends(data.toUserId, newPlayer.id);
+        const areFriends =
+          friendsStore.areFriends(newPlayer.id, data.toUserId) ||
+          friendsStore.areFriends(data.toUserId, newPlayer.id);
         if (!areFriends) {
           socket.emit('crossTownTeleportResult', {
             success: false,
@@ -582,7 +556,7 @@ export default class Town {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
-            reason: 'Target player\'s town not found',
+            reason: "Target player's town not found",
             cooldownRemaining: 0,
           });
           return;
@@ -691,7 +665,7 @@ export default class Town {
           socket.emit('crossTownTeleportResult', {
             success: false,
             accepted: false,
-            reason: 'Requesting player\'s town not found',
+            reason: "Requesting player's town not found",
           });
           return;
         }
@@ -798,6 +772,8 @@ export default class Town {
           userId: player.id,
           userName: player.userName,
           status: 'Offline',
+          townID: undefined,
+          townName: undefined,
         });
       }
     });
@@ -1011,7 +987,13 @@ export default class Town {
    */
   public emitUserStatusUpdate(
     playerId: string,
-    statusUpdate: { userId: string; userName: string; status: string },
+    statusUpdate: {
+      userId: string;
+      userName: string;
+      status: string;
+      townID?: string;
+      townName?: string;
+    },
   ): void {
     const socket = this._playerSockets.get(playerId);
     if (socket) {
