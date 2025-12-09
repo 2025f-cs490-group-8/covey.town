@@ -35,7 +35,7 @@ import {
   ModalCloseButton,
   useDisclosure,
 } from '@chakra-ui/react';
-import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon,  ArrowBackIcon   } from '@chakra-ui/icons';
+import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon, NotAllowedIcon, ViewIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
 import { usePlayers } from '../../classes/TownController';
 import { ArrowRightIcon } from '@chakra-ui/icons';
@@ -50,6 +50,7 @@ interface Friend {
   friendStatus?: UserStatus;
   friendTownID?: string;
   friendTownName?: string;
+  isBlockedByFriend?: boolean;
 }
 
 interface FriendRequest {
@@ -59,6 +60,12 @@ interface FriendRequest {
   toUserId: string;
   toUserName: string;
   status: string;
+  createdAt: Date;
+}
+
+interface BlockedUser {
+  blockedId: string;
+  blockedUserName: string;
   createdAt: Date;
 }
 
@@ -101,6 +108,8 @@ export default function Profile(): JSX.Element {
   const [searchResults, setSearchResults] = useState<Array<{ playerId: string; userName: string; townID: string; townName: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [teleportCooldown, setTeleportCooldown] = useState<number>(0);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUser[]>([]);
+  const [showBlockedUsers, setShowBlockedUsers] = useState(false);
 
   const handleSendTeleportRequest = async (friend: Friend) => {
         try {
@@ -259,17 +268,19 @@ useEffect(() => {
   };
 }, [townController]);
 
-  // Load friends and friend requests
+  // Load friends, friend requests, and blocked users
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
-        const [friendsData, requestsData] = await Promise.all([
+        const [friendsData, requestsData, blockedData] = await Promise.all([
           townController.getFriends(),
           townController.getFriendRequests(),
+          townController.getBlockedUsers(),
         ]);
         setFriends(friendsData);
         setFriendRequests(requestsData);
+        setBlockedUsers(blockedData);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data');
@@ -379,16 +390,54 @@ useEffect(() => {
       });
     };
 
+    // Listen for user blocked events (when someone blocks the current user)
+    const handleUserBlocked = (blockData: { blockerId: string; blockerUserName: string }) => {
+      // Mark the blocker as having blocked us (they'll still appear in our friends list)
+      setFriends(prev => prev.map(friend => 
+        friend.friendId === blockData.blockerId 
+          ? { ...friend, isBlockedByFriend: true }
+          : friend
+      ));
+      toast({
+        title: 'Blocked',
+        description: `${blockData.blockerUserName} has blocked you. You can still see them in your friends list but cannot interact with them.`,
+        status: 'warning',
+        duration: 5000,
+        isClosable: true,
+      });
+    };
+
+    // Listen for user unblocked events (when someone unblocks the current user)
+    const handleUserUnblocked = (unblockData: { unblockerId: string; unblockerUserName: string }) => {
+      // Remove the blocked indicator from this friend
+      setFriends(prev => prev.map(friend => 
+        friend.friendId === unblockData.unblockerId 
+          ? { ...friend, isBlockedByFriend: false }
+          : friend
+      ));
+      toast({
+        title: 'Unblocked',
+        description: `${unblockData.unblockerUserName} has unblocked you. You can now interact with them again.`,
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      });
+    };
+
     townController.on('friendRequestReceived', handleFriendRequest);
     townController.on('friendRequestAccepted', handleFriendAccepted);
     townController.on('friendRemoved', handleFriendRemoved);
     townController.on('userStatusUpdated', handleStatusUpdate);
+    townController.on('userBlocked', handleUserBlocked);
+    townController.on('userUnblocked', handleUserUnblocked);
 
     return () => {
       townController.off('friendRequestReceived', handleFriendRequest);
       townController.off('friendRequestAccepted', handleFriendAccepted);
       townController.off('friendRemoved', handleFriendRemoved);
       townController.off('userStatusUpdated', handleStatusUpdate);
+      townController.off('userBlocked', handleUserBlocked);
+      townController.off('userUnblocked', handleUserUnblocked);
     };
   }, [townController, username]);
 
@@ -628,6 +677,83 @@ const handleDeclineCrossTownTeleport = async () => {
     }
   };
 
+  const handleBlockUser = async (userId: string, userName: string) => {
+    try {
+      await townController.blockUser(userId);
+      // Remove from friends list (blocking also removes friendship)
+      setFriends(prev => prev.filter(friend => friend.friendId !== userId));
+      // Add to blocked users list
+      setBlockedUsers(prev => [...prev, {
+        blockedId: userId,
+        blockedUserName: userName,
+        createdAt: new Date(),
+      }]);
+      toast({
+        title: 'User Blocked',
+        description: `${userName} has been blocked. They can no longer send you friend requests or interact with you.`,
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to block user',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleUnblockUser = async (userId: string, userName: string) => {
+    try {
+      const result = await townController.unblockUser(userId);
+      // Remove from blocked users list
+      setBlockedUsers(prev => prev.filter(user => user.blockedId !== userId));
+      
+      // If the friendship was restored, add them back to friends list
+      if (result.friendRestored && result.friend) {
+        setFriends(prev => {
+          // Check if they're not already in the list
+          if (!prev.some(f => f.friendId === result.friend!.friendId)) {
+            return [...prev, {
+              friendId: result.friend!.friendId,
+              friendUserName: result.friend!.friendUserName,
+              friendStatus: result.friend!.friendStatus as UserStatus,
+              friendTownID: result.friend!.friendTownID,
+              friendTownName: result.friend!.friendTownName,
+            }];
+          }
+          return prev;
+        });
+        toast({
+          title: 'User Unblocked',
+          description: `${userName} has been unblocked and restored to your friends list.`,
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        toast({
+          title: 'User Unblocked',
+          description: `${userName} has been unblocked. They had already removed you from their friends list, so you'll need to send a new friend request.`,
+          status: 'info',
+          duration: 5000,
+          isClosable: true,
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to unblock user',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
   // Search for players across all towns when search query changes
   useEffect(() => {
     const searchPlayers = async () => {
@@ -639,7 +765,7 @@ const handleDeclineCrossTownTeleport = async () => {
       setIsSearching(true);
       try {
         const results = await townController.searchPlayers(addFriendSearchQuery.trim());
-        // Filter out current user, existing friends, and pending requests
+        // Filter out current user, existing friends, pending requests, and blocked users
         const filtered = results.filter(result => {
           if (result.playerId === townController.userID) {
             return false;
@@ -650,6 +776,10 @@ const handleDeclineCrossTownTeleport = async () => {
           if (friendRequests.some(request => 
             request.fromUserId === result.playerId || request.toUserId === result.playerId
           )) {
+            return false;
+          }
+          // Filter out blocked users
+          if (blockedUsers.some(blocked => blocked.blockedId === result.playerId)) {
             return false;
           }
           return true;
@@ -666,7 +796,7 @@ const handleDeclineCrossTownTeleport = async () => {
     // Debounce search
     const timeoutId = setTimeout(searchPlayers, 300);
     return () => clearTimeout(timeoutId);
-  }, [addFriendSearchQuery, townController, friends, friendRequests]);
+  }, [addFriendSearchQuery, townController, friends, friendRequests, blockedUsers]);
 
   // Get available users from current town (for when search is empty)
   const availableUsers = players.filter(player => {
@@ -682,6 +812,10 @@ const handleDeclineCrossTownTeleport = async () => {
     if (friendRequests.some(request => 
       request.fromUserId === player.id || request.toUserId === player.id
     )) {
+      return false;
+    }
+    // Exclude blocked users
+    if (blockedUsers.some(blocked => blocked.blockedId === player.id)) {
       return false;
     }
     return true;
@@ -1016,48 +1150,76 @@ const handleDeclineCrossTownTeleport = async () => {
                     p={3}
                     borderWidth="1px"
                     borderRadius="md"
-                    borderColor={borderColor}
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}
+                    borderColor={friend.isBlockedByFriend ? 'red.300' : borderColor}
+                    bg={friend.isBlockedByFriend ? useColorModeValue('red.50', 'red.900') : undefined}
+                    _hover={{ bg: friend.isBlockedByFriend ? useColorModeValue('red.100', 'red.800') : useColorModeValue('gray.50', 'gray.700') }}
                   >
                     <Flex align="center">
-                      <Avatar size="sm" name={friend.friendUserName} mr={3} />
+                      <Avatar size="sm" name={friend.friendUserName} mr={3} opacity={friend.isBlockedByFriend ? 0.6 : 1} />
                       <Box flex={1}>
-                        <Text fontWeight="medium">{friend.friendUserName}</Text>
+                        <HStack spacing={2}>
+                          <Text fontWeight="medium" color={friend.isBlockedByFriend ? 'gray.500' : undefined}>
+                            {friend.friendUserName}
+                          </Text>
+                          {friend.isBlockedByFriend && (
+                            <Badge colorScheme="red" fontSize="xs">
+                              Blocked You
+                            </Badge>
+                          )}
+                        </HStack>
                         <HStack spacing={1}>
                         <Box
                           w={2}
                           h={2}
                           borderRadius="full"
-                          bg={`${getStatusColor(friend.friendStatus || 'Offline')}.400`}
+                          bg={friend.isBlockedByFriend ? 'gray.400' : `${getStatusColor(friend.friendStatus || 'Offline')}.400`}
                         />
                         <Text fontSize="xs" color="gray.500">
-                          {friend.friendStatus || 'Offline'}
+                          {friend.isBlockedByFriend ? 'Blocked' : (friend.friendStatus || 'Offline')}
                         </Text>
                         </HStack>
-                        {friend.friendTownName && (
+                        {friend.friendTownName && !friend.isBlockedByFriend && (
                           <Text fontSize="xs" color="gray.400" mt={1}>
                             {friend.friendTownID === townId ? 'Same Town' : `Town: ${friend.friendTownName}`}
                           </Text>
                         )}
+                        {friend.isBlockedByFriend && (
+                          <Text fontSize="xs" color="red.500" mt={1}>
+                            This user has blocked you
+                          </Text>
+                        )}
                       </Box>
-                      <IconButton
-                        icon={<ArrowRightIcon />}   
-                        size="sm"
-                        colorScheme="blue"
-                        variant="outline"
-                        aria-label={`Teleport to ${friend.friendUserName}`}
-                        onClick={() => handleSendTeleportRequest(friend)}
-                        isDisabled={friend.friendStatus !== 'Online'}
-                        title={
-                          teleportCooldown > 0
-                            ? `Teleport on cooldown (${teleportCooldown}s remaining)`
-                            : friend.friendStatus !== 'Online' 
-                              ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` 
-                              : friend.friendTownID === townId 
-                                ? `Teleport to ${friend.friendUserName} (same town)`
-                                : `Teleport to ${friend.friendUserName} (cross-town)`
-                        }
-                      />
+                      {!friend.isBlockedByFriend && (
+                        <>
+                          <IconButton
+                            icon={<ArrowRightIcon />}   
+                            size="sm"
+                            colorScheme="blue"
+                            variant="outline"
+                            aria-label={`Teleport to ${friend.friendUserName}`}
+                            onClick={() => handleSendTeleportRequest(friend)}
+                            isDisabled={friend.friendStatus !== 'Online'}
+                            title={
+                              teleportCooldown > 0
+                                ? `Teleport on cooldown (${teleportCooldown}s remaining)`
+                                : friend.friendStatus !== 'Online' 
+                                  ? `Cannot teleport. ${friend.friendUserName} is ${friend.friendStatus || 'Offline'}.` 
+                                  : friend.friendTownID === townId 
+                                    ? `Teleport to ${friend.friendUserName} (same town)`
+                                    : `Teleport to ${friend.friendUserName} (cross-town)`
+                            }
+                          />
+                          <IconButton
+                            icon={<NotAllowedIcon />}
+                            size="sm"
+                            colorScheme="orange"
+                            variant="ghost"
+                            aria-label={`Block ${friend.friendUserName}`}
+                            onClick={() => handleBlockUser(friend.friendId, friend.friendUserName)}
+                            title="Block user"
+                          />
+                        </>
+                      )}
                       <IconButton
                         icon={<DeleteIcon />}
                         size="sm"
@@ -1065,6 +1227,7 @@ const handleDeclineCrossTownTeleport = async () => {
                         variant="ghost"
                         aria-label={`Remove ${friend.friendUserName} from friends`}
                         onClick={() => handleRemoveFriend(friend.friendId, friend.friendUserName)}
+                        title="Remove friend"
                       />
                     </Flex>
                   </Box>
@@ -1088,6 +1251,65 @@ const handleDeclineCrossTownTeleport = async () => {
             >
           Logout
         </Button>
+
+        <Divider />
+
+        {/* Blocked Users Section */}
+        <Box>
+          <Flex align="center" mb={4}>
+            <Heading size="md">Blocked Users ({blockedUsers.length})</Heading>
+            <Spacer />
+            {blockedUsers.length > 0 && (
+              <Button
+                leftIcon={<ViewIcon />}
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowBlockedUsers(!showBlockedUsers)}
+              >
+                {showBlockedUsers ? 'Hide' : 'Show'}
+              </Button>
+            )}
+          </Flex>
+
+          {showBlockedUsers && blockedUsers.length > 0 && (
+            <VStack spacing={2} align="stretch" maxH="200px" overflowY="auto">
+              {blockedUsers.map((blockedUser) => (
+                <Box
+                  key={blockedUser.blockedId}
+                  p={3}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  borderColor={borderColor}
+                  bg={useColorModeValue('red.50', 'red.900')}
+                >
+                  <Flex align="center">
+                    <Avatar size="sm" name={blockedUser.blockedUserName} mr={3} />
+                    <Box flex={1}>
+                      <Text fontWeight="medium">{blockedUser.blockedUserName}</Text>
+                      <Text fontSize="xs" color="gray.500">
+                        Blocked on {blockedUser.createdAt.toLocaleDateString()}
+                      </Text>
+                    </Box>
+                    <Button
+                      size="sm"
+                      colorScheme="green"
+                      variant="outline"
+                      onClick={() => handleUnblockUser(blockedUser.blockedId, blockedUser.blockedUserName)}
+                    >
+                      Unblock
+                    </Button>
+                  </Flex>
+                </Box>
+              ))}
+            </VStack>
+          )}
+
+          {blockedUsers.length === 0 && (
+            <Text color="gray.500" textAlign="center" py={2}>
+              No blocked users
+            </Text>
+          )}
+        </Box>
 
         <Divider />
 

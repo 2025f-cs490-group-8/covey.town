@@ -264,7 +264,9 @@ export interface ServerToClientEvents {
   friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
   friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
   friendRemoved: (removedFriend: { friendId: string; friendUserName: string }) => void;
-  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string ; townID?: string; townName?: string;}) => void;
+  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string }) => void;
+  userBlocked: (blockData: { blockerId: string; blockerUserName: string }) => void;
+  userUnblocked: (unblockData: { unblockerId: string; unblockerUserName: string }) => void;
   teleportRequestReceived: (data: { fromUserId: string;fromUserName: string;}) => void;
   teleportResult: (data: {success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation; cooldownRemaining?: number;}) => void;
   crossTownTeleportRequestReceived: (data: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;

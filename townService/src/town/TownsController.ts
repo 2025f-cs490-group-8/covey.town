@@ -407,6 +407,7 @@ export class TownsController extends Controller {
    * Get friend list for the current user
    * @param townID ID of the town
    * @param sessionToken session token of the player
+   * @returns list of friends with their statuses and block status
    * @returns list of friends with their statuses (using account usernames)
    */
   @Get('{townID}/friends')
@@ -414,6 +415,7 @@ export class TownsController extends Controller {
   public async getFriends(
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
+  ): Promise<Array<{ friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string; isBlockedByFriend?: boolean }>> {
   ): Promise<
     Array<{
       friendId: string;
@@ -445,6 +447,8 @@ export class TownsController extends Controller {
 
       // If friend is not in any town, their status should be Offline
       const actualStatus = friendTownID ? f.friendStatus : 'Offline';
+      // Check if this friend has blocked the current user
+      const isBlockedByFriend = this._friendsStore.isBlocked(f.friendId, player.id);
 
       return {
         friendId: friendSessionId || f.friendId, // Return session ID if available, otherwise account username
@@ -452,6 +456,7 @@ export class TownsController extends Controller {
         friendStatus: actualStatus,
         friendTownID: friendTownID || undefined,
         friendTownName: friendTown?.friendlyName || undefined,
+        isBlockedByFriend,
       };
     });
   }
@@ -676,6 +681,178 @@ export class TownsController extends Controller {
         });
       }
     }
+  }
+
+  /**
+   * Block a user. This removes the friendship and prevents future interactions.
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The user ID to block
+   */
+  @Post('{townID}/block')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async blockUser(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { userId: string },
+  ): Promise<void> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    if (player.id === requestBody.userId) {
+      throw new InvalidParametersError('Cannot block yourself');
+    }
+
+    // Find the user to block across all towns
+    const targetPlayerInfo = this._townsStore.findPlayerAcrossTowns(requestBody.userId);
+    const targetUserName = targetPlayerInfo?.player.userName || 'Unknown User';
+
+    try {
+      // Block the user (removes friendship from blocker's side only)
+      this._friendsStore.blockUser(
+        player.id,
+        player.userName,
+        requestBody.userId,
+        targetUserName,
+      );
+
+      // Notify the blocked user that they've been blocked (if they're online)
+      // They will still see the blocker in their friends list but with a "blocked" indicator
+      if (targetPlayerInfo) {
+        targetPlayerInfo.town.emitUserBlocked(targetPlayerInfo.player.id, {
+          blockerId: player.id,
+          blockerUserName: player.userName,
+        });
+      }
+    } catch (error) {
+      throw new InvalidParametersError(
+        error instanceof Error ? error.message : 'Failed to block user',
+      );
+    }
+  }
+
+  /**
+   * Unblock a user and restore the friendship
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param requestBody The user ID to unblock
+   * @returns The restored friend info if the friendship was restored
+   */
+  @Post('{townID}/unblock')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async unblockUser(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+    @Body() requestBody: { userId: string },
+  ): Promise<{ friendRestored: boolean; friend?: { friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string } }> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    try {
+      const restoredFriend = this._friendsStore.unblockUser(player.id, requestBody.userId);
+
+      // Notify the unblocked user (if they're online) so they can update their UI
+      const unblockedPlayerInfo = this._townsStore.findPlayerAcrossTowns(requestBody.userId);
+      if (unblockedPlayerInfo) {
+        unblockedPlayerInfo.town.emitUserUnblocked(unblockedPlayerInfo.player.id, {
+          unblockerId: player.id,
+          unblockerUserName: player.userName,
+        });
+      }
+
+      if (restoredFriend) {
+        // Get the friend's current status and town info
+        const friendTownID = this._townsStore.getPlayerTown(restoredFriend.friendId);
+        const friendTown = friendTownID ? this._townsStore.getTownByID(friendTownID) : undefined;
+        const friendStatus = friendTownID 
+          ? this._friendsStore.getUserStatus(restoredFriend.friendId)
+          : 'Offline';
+
+        return {
+          friendRestored: true,
+          friend: {
+            friendId: restoredFriend.friendId,
+            friendUserName: restoredFriend.friendUserName,
+            friendStatus,
+            friendTownID: friendTownID || undefined,
+            friendTownName: friendTown?.friendlyName || undefined,
+          },
+        };
+      }
+
+      return { friendRestored: false };
+    } catch (error) {
+      throw new InvalidParametersError(
+        error instanceof Error ? error.message : 'Failed to unblock user',
+      );
+    }
+  }
+
+  /**
+   * Get list of blocked users for the current user
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @returns list of blocked users
+   */
+  @Get('{townID}/blocked')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async getBlockedUsers(
+    @Path() townID: string,
+    @Header('X-Session-Token') sessionToken: string,
+  ): Promise<Array<{ blockedId: string; blockedUserName: string; createdAt: Date }>> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    const blockedUsers = this._friendsStore.getBlockedUsers(player.id);
+    return blockedUsers.map(b => ({
+      blockedId: b.blockedId,
+      blockedUserName: b.blockedUserName,
+      createdAt: b.createdAt,
+    }));
+  }
+
+  /**
+   * Check if a user is blocked by the current player
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @param userId ID of the user to check
+   * @returns whether the user is blocked
+   */
+  @Get('{townID}/blocked/{userId}')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
+  public async isUserBlocked(
+    @Path() townID: string,
+    @Path() userId: string,
+    @Header('X-Session-Token') sessionToken: string,
+  ): Promise<{ isBlocked: boolean }> {
+    const town = this._townsStore.getTownByID(townID);
+    if (!town) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+    const player = town.getPlayerBySessionToken(sessionToken);
+    if (!player) {
+      throw new InvalidParametersError('Invalid values specified');
+    }
+
+    return { isBlocked: this._friendsStore.isBlocked(player.id, userId) };
   }
 
   /**
