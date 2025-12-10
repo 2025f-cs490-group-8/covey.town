@@ -403,6 +403,14 @@ export class TownsController extends Controller {
     }));
   }
 
+  /**
+   * Get the list of friends for the current user
+   * @param townID ID of the town
+   * @param sessionToken session token of the player
+   * @returns list of friends with their status and town information
+   */
+  @Get('{townID}/friends')
+  @Response<InvalidParametersError>(400, 'Invalid values specified')
   public async getFriends(
     @Path() townID: string,
     @Header('X-Session-Token') sessionToken: string,
@@ -859,10 +867,11 @@ export class TownsController extends Controller {
    */
   public async joinTown(socket: CoveyTownSocket) {
     // Parse the client's requested username and optional spawn location from the connection
-    const { userName, townID, spawnLocation } = socket.handshake.auth as {
+    const { userName, townID, spawnLocation, accountUsername } = socket.handshake.auth as {
       userName: string;
       townID: string;
       spawnLocation?: { x: number; y: number; rotation: string; moving: boolean };
+      accountUsername?: string;
     };
 
     const town = this._townsStore.getTownByID(townID);
@@ -880,7 +889,10 @@ export class TownsController extends Controller {
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
     console.log('Display Name:', newPlayer.userName);
-    console.log('Account Username:', accountUsername);
+    
+    // Use accountUsername if provided, otherwise fall back to userName
+    const effectiveAccountUsername = accountUsername || userName;
+    console.log('Account Username:', effectiveAccountUsername);
 
     // Track that this player is in this town
     this._townsStore.setPlayerTown(newPlayer.id, townID);
@@ -888,13 +900,13 @@ export class TownsController extends Controller {
     // Register this session with the FriendsStore using the account username
     // accountUsername is the persistent identifier (e.g., "t" from login)
     // userName is the display name in the town (e.g., "wahgiotghwaioghwa")
-    this._friendsStore.registerSession(newPlayer.id, accountUsername, accountUsername);
+    this._friendsStore.registerSession(newPlayer.id, effectiveAccountUsername, effectiveAccountUsername);
 
     // Set default status to Online when user joins
-    this._friendsStore.setUserStatus(accountUsername, 'Online');
+    this._friendsStore.setUserStatus(effectiveAccountUsername, 'Online');
 
     // Notify all friends across all towns that this player is now Online
-    const friends = this._friendsStore.getFriends(accountUsername);
+    const friends = this._friendsStore.getFriends(effectiveAccountUsername);
     friends.forEach(friend => {
       const friendSessionId = this._friendsStore.getSessionPlayerId(friend.friendId);
       if (friendSessionId) {
@@ -902,7 +914,7 @@ export class TownsController extends Controller {
         if (friendInfo) {
           friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
             userId: newPlayer.id, // Send session ID to client
-            userName: accountUsername, // Send account username (persistent)
+            userName: effectiveAccountUsername, // Send account username (persistent)
             status: 'Online',
             townID: town.townID,
             townName: town.friendlyName,
@@ -927,7 +939,7 @@ export class TownsController extends Controller {
       this._friendsStore.unregisterSession(newPlayer.id);
 
       // Set status to Offline
-      this._friendsStore.setUserStatus(accountUsername, 'Offline');
+      this._friendsStore.setUserStatus(effectiveAccountUsername, 'Offline');
 
       // Notify friends of offline status
       friends.forEach(friend => {
@@ -937,7 +949,7 @@ export class TownsController extends Controller {
           if (friendInfo) {
             friendInfo.town.emitUserStatusUpdate(friendInfo.player.id, {
               userId: newPlayer.id,
-              userName: accountUsername, // Send account username
+              userName: effectiveAccountUsername, // Send account username
               status: 'Offline',
               townID: undefined,
               townName: undefined,

@@ -35,7 +35,7 @@ import {
   ModalCloseButton,
   useDisclosure,
 } from '@chakra-ui/react';
-import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon, NotAllowedIcon, ViewIcon } from '@chakra-ui/icons';
+import { ChevronDownIcon, SearchIcon, AddIcon, CloseIcon, CheckIcon, DeleteIcon, NotAllowedIcon, ViewIcon, ArrowBackIcon } from '@chakra-ui/icons';
 import useTownController from '../../hooks/useTownController';
 import { usePlayers } from '../../classes/TownController';
 import { ArrowRightIcon } from '@chakra-ui/icons';
