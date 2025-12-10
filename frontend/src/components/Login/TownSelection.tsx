@@ -270,13 +270,13 @@ export default function TownSelection(): JSX.Element {
               <FormLabel htmlFor='name'>Name</FormLabel>
               <Input
                autoFocus
-  name='name'
-  placeholder='Your name'
-  value={userName}
-  onChange={event => setUserName(event.target.value)}
-  isReadOnly={!!accountUsername}  // Add this line - makes it read-only if accountUsername exists
-  bg={accountUsername ? 'gray.100' : 'white'}  // Add this line - grays out background when read-only
-  cursor={accountUsername ? 'not-allowed' : 'text'}  // Add this line - shows not-allowed cursor
+                name='name'
+                placeholder='Your name'
+                value={userName}
+                onChange={event => setUserName(event.target.value)}
+                isReadOnly={!!accountUsername}  
+                bg={accountUsername ? 'gray.100' : 'white'}  
+                cursor={accountUsername ? 'not-allowed' : 'text'} 
               />
             </FormControl>
           </Box>
