@@ -67,6 +67,12 @@ export default function TownSelection(): JSX.Element {
     };
   }, [updateTownListings]);
 
+    useEffect(() => {
+      if (!userName && accountUsername) {
+        setUserName(accountUsername);
+      }
+    }, [accountUsername, userName]);
+
   const handleJoin = useCallback(
     async (coveyRoomID: string) => {
       let connectWatchdog: NodeJS.Timeout | undefined = undefined;
@@ -263,11 +269,14 @@ export default function TownSelection(): JSX.Element {
             <FormControl>
               <FormLabel htmlFor='name'>Name</FormLabel>
               <Input
-                autoFocus
-                name='name'
-                placeholder='Your name'
-                value={userName}
-                onChange={event => setUserName(event.target.value)}
+               autoFocus
+  name='name'
+  placeholder='Your name'
+  value={userName}
+  onChange={event => setUserName(event.target.value)}
+  isReadOnly={!!accountUsername}  // Add this line - makes it read-only if accountUsername exists
+  bg={accountUsername ? 'gray.100' : 'white'}  // Add this line - grays out background when read-only
+  cursor={accountUsername ? 'not-allowed' : 'text'}  // Add this line - shows not-allowed cursor
               />
             </FormControl>
           </Box>

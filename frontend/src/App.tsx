@@ -43,7 +43,7 @@ function App() {
     townController?.disconnect();
   }, [townController]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+ const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
   
   if (!username || !password) {
@@ -57,7 +57,7 @@ function App() {
   }
 
   try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/login`, {
+    const response = await fetch('http://localhost:8081/auth/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -68,17 +68,21 @@ function App() {
       }),
     });
 
-    const data = await response.json();
-
     if (!response.ok) {
-      throw new Error(data.message || 'Login failed');
+      const errorText = await response.text();
+      throw new Error(errorText || 'Login failed');
     }
-    console.log('Login successful, setting accountUsername to:', data.accountUsername);
 
-    // Store the account username for later use
-    setAccountUsername(data.accountUsername);
+    const data = await response.json();
+    console.log('Full login response:', data); 
+    
+    // Use fallback in case accountUsername is missing
+    const accountUsernameValue = data.accountUsername || data.name || username;
+    console.log('App.tsx - Setting accountUsername to:', accountUsernameValue); 
+    
+    setAccountUsername(accountUsernameValue);
     setIsAuthenticated(true);
-    localStorage.setItem('accountUsername', data.accountUsername);
+    localStorage.setItem('accountUsername', accountUsernameValue);
     
     toast({
       title: 'Success',
@@ -87,6 +91,7 @@ function App() {
       duration: 2000,
     });
   } catch (error) {
+    console.error('Login error:', error);
     toast({
       title: 'Login Failed',
       description: error instanceof Error ? error.message : 'Invalid credentials',
@@ -364,7 +369,7 @@ function App() {
   const townsService = new TownsServiceClient({ BASE: url }).towns;
   
   return (
-    <LoginControllerContext.Provider value={{ setTownController, townsService, accountUsername }}>
+    <LoginControllerContext.Provider value={{ setTownController, townsService, accountUsername: accountUsername || '' }}>
       <UnsupportedBrowserWarning>
         <VideoProvider options={connectionOptions} onError={setError} onDisconnect={onDisconnect}>
           <ErrorDialog dismissError={() => setError(null)} error={error} />

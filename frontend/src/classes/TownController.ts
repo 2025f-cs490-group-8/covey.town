@@ -51,6 +51,7 @@ export type ConnectionProperties = {
   userName: string;
   townID: string;
   loginController: LoginController;
+  accountUsername: string; 
   spawnLocation?: PlayerLocation;
 };
 
@@ -58,6 +59,8 @@ export type ConnectionProperties = {
  * The TownController emits these events. Components may subscribe to these events
  * by calling the `addListener` method on a TownController
  */
+
+
 export type TownEvents = {
   /**
    * An event that indicates that the TownController is now connected to the townService
@@ -247,10 +250,11 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   private _interactableEmitter = new EventEmitter();
 
-  public constructor({ userName, townID, loginController, spawnLocation }: ConnectionProperties) {
+  public constructor({ userName, townID, loginController, accountUsername, spawnLocation }: ConnectionProperties) {
     super();
     this._townID = townID;
     this._userName = userName;
+    this._accountUsername = accountUsername;
     this._loginController = loginController;
 
     /*
@@ -262,7 +266,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
 
     const url = 'http://localhost:8081';
     assert(url);
-    this._socket = io(url, { auth: { userName, townID, spawnLocation } });
+    this._socket = io(url, { auth: { userName, townID, accountUsername, spawnLocation } });
     this._townsService = new TownsServiceClient({ BASE: url });
       this.registerSocketListeners();  
   }
