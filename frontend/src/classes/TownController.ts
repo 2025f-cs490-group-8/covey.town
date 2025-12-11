@@ -44,6 +44,8 @@ import TicTacToeAreaController from './interactable/TicTacToeAreaController';
 import ViewingAreaController from './interactable/ViewingAreaController';
 import PlayerController from './PlayerController';
 
+type UserStatus = 'Online' | 'Busy' | 'Offline';
+
 const CALCULATE_NEARBY_PLAYERS_DELAY_MS = 300;
 const SOCKET_COMMAND_TIMEOUT_MS = 5000;
 
@@ -51,7 +53,7 @@ export type ConnectionProperties = {
   userName: string;
   townID: string;
   loginController: LoginController;
-  accountUsername: string; 
+  accountUsername: string;
   spawnLocation?: PlayerLocation;
 };
 
@@ -59,7 +61,6 @@ export type ConnectionProperties = {
  * The TownController emits these events. Components may subscribe to these events
  * by calling the `addListener` method on a TownController
  */
-
 
 export type TownEvents = {
   /**
@@ -101,11 +102,19 @@ export type TownEvents = {
   /**
    * An event that indicates that a friend request has been received
    */
-  friendRequestReceived: (request: { requestId: string; fromUserId: string; fromUserName: string }) => void;
+  friendRequestReceived: (request: {
+    requestId: string;
+    fromUserId: string;
+    fromUserName: string;
+  }) => void;
   /**
    * An event that indicates that a friend request has been accepted
    */
-  friendRequestAccepted: (friend: { friendId: string; friendUserName: string; friendStatus?: string }) => void;
+  friendRequestAccepted: (friend: {
+    friendId: string;
+    friendUserName: string;
+    friendStatus?: string;
+  }) => void;
   /**
    * An event that indicates that a friend has been removed
    */
@@ -113,7 +122,13 @@ export type TownEvents = {
   /**
    * An event that indicates that a friend's status has been updated
    */
-  userStatusUpdated: (statusUpdate: { userId: string; userName: string; status: string; townID?: string; townName?: string; }) => void;
+  userStatusUpdated: (statusUpdate: {
+    userId: string;
+    userName: string;
+    status: string;
+    townID?: string;
+    townName?: string;
+  }) => void;
   /**
    * An event that indicates that the current user has been blocked by another user
    */
@@ -137,11 +152,33 @@ export type TownEvents = {
    * @param obj the interactable that is being interacted with
    */
   interact: <T extends Interactable>(typeName: T['name'], obj: T) => void;
-  
+
   teleportRequestReceived: (payload: { fromUserId: string; fromUserName: string }) => void;
-  teleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; fromUserId?: string; fromUserName?: string; newLocation?: PlayerLocation; cooldownRemaining?: number;}) => void;
-  crossTownTeleportRequestReceived: (payload: { fromUserId: string; fromUserName: string; fromTownID: string; fromTownName: string }) => void;
-  crossTownTeleportResult: (data: { success: boolean; accepted?: boolean; reason?: string; targetTownID?: string; targetTownName?: string; cooldownRemaining?: number; spawnLocation?: PlayerLocation; }) => void;};
+  teleportResult: (data: {
+    success: boolean;
+    accepted?: boolean;
+    reason?: string;
+    fromUserId?: string;
+    fromUserName?: string;
+    newLocation?: PlayerLocation;
+    cooldownRemaining?: number;
+  }) => void;
+  crossTownTeleportRequestReceived: (payload: {
+    fromUserId: string;
+    fromUserName: string;
+    fromTownID: string;
+    fromTownName: string;
+  }) => void;
+  crossTownTeleportResult: (data: {
+    success: boolean;
+    accepted?: boolean;
+    reason?: string;
+    targetTownID?: string;
+    targetTownName?: string;
+    cooldownRemaining?: number;
+    spawnLocation?: PlayerLocation;
+  }) => void;
+};
 
 /**
  * The (frontend) TownController manages the communication between the frontend
@@ -162,7 +199,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   private _socket: CoveyTownSocket;
 
-    /**
+  /**
    * The username of the player whose browser created this TownController (display name in town)
    */
 
@@ -170,10 +207,12 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * The account username from login (persistent identifier for friends)
    */
   private readonly _accountUsername: string;
+
   /**
    * The REST API client to access the townsService
    */
   private _townsService: TownsServiceClient;
+
   /**
    * The login controller is used by the frontend application to manage logging in to a town,
    * and is also used to log out of a town.
@@ -250,7 +289,13 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    */
   private _interactableEmitter = new EventEmitter();
 
-  public constructor({ userName, townID, loginController, accountUsername, spawnLocation }: ConnectionProperties) {
+  public constructor({
+    userName,
+    townID,
+    loginController,
+    accountUsername,
+    spawnLocation,
+  }: ConnectionProperties) {
     super();
     this._townID = townID;
     this._userName = userName;
@@ -268,15 +313,14 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     assert(url);
     this._socket = io(url, { auth: { userName, townID, accountUsername, spawnLocation } });
     this._townsService = new TownsServiceClient({ BASE: url });
-      this.registerSocketListeners();  
+    this.registerSocketListeners();
   }
-  
 
   public get sessionToken() {
     return this._sessionToken || '';
   }
 
-   public get accountUsername() {
+  public get accountUsername() {
     return this._accountUsername;
   }
 
@@ -400,26 +444,27 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     this._interactableEmitter.emit('endInteraction', objectNoLongerInteracting);
   }
 
-      public async getChatMessages(interactableID?: string): Promise<ChatMessage[]> {
-      try {
-        const rawMessages = await this._townsService.towns.getChatMessages(
-          this._townID,
-          this.sessionToken,
-          interactableID,
-        );
+  public async getChatMessages(interactableID?: string): Promise<ChatMessage[]> {
+    try {
+      const rawMessages = await this._townsService.towns.getChatMessages(
+        this._townID,
+        this.sessionToken,
+        interactableID,
+      );
 
-        return rawMessages.map(m => ({
-          author: 'system',
-          sid: crypto.randomUUID(),
-          body: '',
-          dateCreated: new Date(m.dateCreated),
-          interactableID,
-        }));
-      } catch (err) {
-        console.error('getChatMessages failed:', err);
-        return [];
-      }
+      return rawMessages.map(m => ({
+        author: 'system',
+        sid: crypto.randomUUID(),
+        body: '',
+        dateCreated: new Date(m.dateCreated),
+        interactableID,
+      }));
+    } catch (err) {
+      console.error('getChatMessages failed:', err);
+      return [];
     }
+  }
+
   /**
    * Registers listeners for the events that can come from the server to our socket
    */
@@ -427,12 +472,12 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
     /**
      * On chat messages, forward the messages to listeners who subscribe to the controller's events
      */
-      this._socket.on('teleportRequestReceived', data => {
+    this._socket.on('teleportRequestReceived', data => {
       this.emit('teleportRequestReceived', data);
     });
 
     /** TELEPORT: incoming response */
-      this._socket.on('teleportResult', data => {
+    this._socket.on('teleportResult', data => {
       // If teleport was successful and we have a new location, force update the local player's position
       if (data.success && data.accepted && data.newLocation && this._ourPlayer) {
         // Force update the local player's position for teleportation
@@ -475,9 +520,8 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       this.emit('crossTownTeleportResult', data);
     });
 
-     this._socket.on('chatMessage', message => {
+    this._socket.on('chatMessage', message => {
       this.emit('chatMessage', message);
-      
     });
 
     /**
@@ -577,7 +621,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         } else {
           const oldLocation = { ...playerToUpdate.location };
           playerToUpdate.location = movedPlayer.location;
-          // If another player moved significantly (like after teleportation), 
+          // If another player moved significantly (like after teleportation),
           // check if they're now nearby and force immediate proximity recalculation
           if (this._ourPlayer && this._ourPlayer.location) {
             const dx = movedPlayer.location.x - this._ourPlayer.location.x;
@@ -691,7 +735,9 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * Accept a friend request
    * @param requestId The ID of the friend request to accept
    */
-  public async acceptFriendRequest(requestId: string): Promise<{ friendId: string; friendUserName: string }> {
+  public async acceptFriendRequest(
+    requestId: string,
+  ): Promise<{ friendId: string; friendUserName: string }> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friendRequest/accept`, {
       method: 'POST',
@@ -745,36 +791,37 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       }
     }
   }
-    /**
-     * Send a teleport request to another player
-     */
-    public async sendTeleportRequest(toUserId: string): Promise<void> {
-      this._socket.emit('teleportRequest', { toUserId });
-    }
 
-    /**
-     * Respond to a teleport request
-     */
-    public async respondTeleport(fromUserId: string, accepted: boolean): Promise<void> {
-      this._socket.emit('teleportResponse', { fromUserId, accepted });
-    }
+  /**
+   * Send a teleport request to another player
+   */
+  public async sendTeleportRequest(toUserId: string): Promise<void> {
+    this._socket.emit('teleportRequest', { toUserId });
+  }
 
-    /**
-     * Send a cross-town teleport request to another player
-     * @param toUserId The ID of the player to teleport to
-     */
-    public async sendCrossTownTeleportRequest(toUserId: string): Promise<void> {
-      this._socket.emit('crossTownTeleportRequest', { toUserId });
-    }
+  /**
+   * Respond to a teleport request
+   */
+  public async respondTeleport(fromUserId: string, accepted: boolean): Promise<void> {
+    this._socket.emit('teleportResponse', { fromUserId, accepted });
+  }
 
-    /**
-     * Respond to a cross-town teleport request
-     * @param fromUserId The ID of the player requesting the teleport
-     * @param accepted Whether to accept the request
-     */
-    public async respondCrossTownTeleport(fromUserId: string, accepted: boolean): Promise<void> {
-      this._socket.emit('crossTownTeleportResponse', { fromUserId, accepted });
-    }
+  /**
+   * Send a cross-town teleport request to another player
+   * @param toUserId The ID of the player to teleport to
+   */
+  public async sendCrossTownTeleportRequest(toUserId: string): Promise<void> {
+    this._socket.emit('crossTownTeleportRequest', { toUserId });
+  }
+
+  /**
+   * Respond to a cross-town teleport request
+   * @param fromUserId The ID of the player requesting the teleport
+   * @param accepted Whether to accept the request
+   */
+  public async respondCrossTownTeleport(fromUserId: string, accepted: boolean): Promise<void> {
+    this._socket.emit('crossTownTeleportResponse', { fromUserId, accepted });
+  }
 
   /**
    * Update user status
@@ -807,14 +854,19 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param query The username search query
    * @returns Array of matching players with their town information
    */
-  public async searchPlayers(query: string): Promise<Array<{ playerId: string; userName: string; townID: string; townName: string }>> {
+  public async searchPlayers(
+    query: string,
+  ): Promise<Array<{ playerId: string; userName: string; townID: string; townName: string }>> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
-    const response = await fetch(`${url}/towns/${this.townID}/searchPlayers?query=${encodeURIComponent(query)}`, {
-      method: 'GET',
-      headers: {
-        'X-Session-Token': this.sessionToken,
+    const response = await fetch(
+      `${url}/towns/${this.townID}/searchPlayers?query=${encodeURIComponent(query)}`,
+      {
+        method: 'GET',
+        headers: {
+          'X-Session-Token': this.sessionToken,
+        },
       },
-    });
+    );
     if (!response.ok) {
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
@@ -837,7 +889,15 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   /**
    * Get the current user's friend list
    */
-  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string; friendTownID?: string; friendTownName?: string }>> {
+  public async getFriends(): Promise<
+    Array<{
+      friendId: string;
+      friendUserName: string;
+      friendStatus?: UserStatus;
+      friendTownID?: string;
+      friendTownName?: string;
+    }>
+  > {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'GET',
@@ -965,7 +1025,16 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param userId The ID of the user to unblock
    * @returns Info about whether the friend was restored
    */
-  public async unblockUser(userId: string): Promise<{ friendRestored: boolean; friend?: { friendId: string; friendUserName: string; friendStatus: string; friendTownID?: string; friendTownName?: string } }> {
+  public async unblockUser(userId: string): Promise<{
+    friendRestored: boolean;
+    friend?: {
+      friendId: string;
+      friendUserName: string;
+      friendStatus: string;
+      friendTownID?: string;
+      friendTownName?: string;
+    };
+  }> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
     const response = await fetch(`${url}/towns/${this.townID}/unblock`, {
       method: 'POST',
@@ -995,7 +1064,9 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   /**
    * Get list of blocked users
    */
-  public async getBlockedUsers(): Promise<Array<{ blockedId: string; blockedUserName: string; createdAt: Date }>> {
+  public async getBlockedUsers(): Promise<
+    Array<{ blockedId: string; blockedUserName: string; createdAt: Date }>
+  > {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
     const response = await fetch(`${url}/towns/${this.townID}/blocked`, {
       method: 'GET',
@@ -1253,10 +1324,11 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
         const d = Math.sqrt(dx * dx + dy * dy);
         const nearby = d < 80;
         // Debug logging for teleportation (can be removed later)
-        if (d < 100) { // Log if within 100 pixels for debugging
+        if (d < 100) {
+          // Log if within 100 pixels for debugging
           console.log(`Player ${p.userName} distance: ${d.toFixed(2)}px, nearby: ${nearby}`, {
             ourPos: { x: this.ourPlayer.location.x, y: this.ourPlayer.location.y },
-            theirPos: { x: p.location.x, y: p.location.y }
+            theirPos: { x: p.location.x, y: p.location.y },
           });
         }
         return nearby;
@@ -1269,7 +1341,6 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   private _playersByIDs(playerIDs: string[]): PlayerController[] {
     return this._playersInternal.filter(eachPlayer => playerIDs.includes(eachPlayer.id));
   }
-  
 }
 
 /**
@@ -1572,20 +1643,20 @@ export function usePlayersInVideoCall(): PlayerController[] {
         if (!samePlayers(nearbyPlayers, prevNearbyPlayers)) {
           console.log('Players in video call changed:', {
             before: prevNearbyPlayers.map(p => p.userName),
-            after: nearbyPlayers.map(p => p.userName)
+            after: nearbyPlayers.map(p => p.userName),
           });
           prevNearbyPlayers = nearbyPlayers;
           setPlayersInCall(nearbyPlayers);
         }
       }
     };
-    
+
     // Force immediate update function for teleportation
     const forceUpdatePlayersInCall = () => {
       lastRecalculatedNearbyPlayers = 0; // Reset the timer to force immediate update
       updatePlayersInCall();
     };
-    
+
     // Listen for teleport results to force immediate proximity recalculation
     const handleTeleportResult = (data: { success: boolean; accepted?: boolean }) => {
       if (data.success && data.accepted) {
@@ -1594,12 +1665,15 @@ export function usePlayersInVideoCall(): PlayerController[] {
         // This ensures video/voice connects immediately when players are teleported next to each other
         setTimeout(() => {
           const nearby = townController.nearbyPlayers();
-          console.log('Nearby players after teleport:', nearby.map(p => p.userName));
+          console.log(
+            'Nearby players after teleport:',
+            nearby.map(p => p.userName),
+          );
           forceUpdatePlayersInCall();
         }, 150); // Small delay to allow location updates to propagate
       }
     };
-    
+
     townController.addListener('playerMoved', updatePlayersInCall);
     townController.addListener('playersChanged', updatePlayersInCall);
     townController.addListener('teleportResult', handleTeleportResult);

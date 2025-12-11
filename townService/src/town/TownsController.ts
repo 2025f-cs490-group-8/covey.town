@@ -883,16 +883,16 @@ export class TownsController extends Controller {
     // Connect the client to the socket.io broadcast room for this town
     socket.join(town.townID);
 
-    console.log('joinTown called with spawnLocation:', spawnLocation);
+    // console.log('joinTown called with spawnLocation:', spawnLocation);
     const newPlayer = await town.addPlayer(userName, socket, spawnLocation);
-    console.log('Player created with location:', newPlayer.location);
+    // console.log('Player created with location:', newPlayer.location);
     assert(newPlayer.videoToken);
-    console.log('Generated token:', newPlayer.videoToken);
-    console.log('Display Name:', newPlayer.userName);
-    
+    // console.log('Generated token:', newPlayer.videoToken);
+    // console.log('Display Name:', newPlayer.userName);
+
     // Use accountUsername if provided, otherwise fall back to userName
     const effectiveAccountUsername = accountUsername || userName;
-    console.log('Account Username:', effectiveAccountUsername);
+    // console.log('Account Username:', effectiveAccountUsername);
 
     // Track that this player is in this town
     this._townsStore.setPlayerTown(newPlayer.id, townID);
@@ -900,7 +900,11 @@ export class TownsController extends Controller {
     // Register this session with the FriendsStore using the account username
     // accountUsername is the persistent identifier (e.g., "t" from login)
     // userName is the display name in the town (e.g., "wahgiotghwaioghwa")
-    this._friendsStore.registerSession(newPlayer.id, effectiveAccountUsername, effectiveAccountUsername);
+    this._friendsStore.registerSession(
+      newPlayer.id,
+      effectiveAccountUsername,
+      effectiveAccountUsername,
+    );
 
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(effectiveAccountUsername, 'Online');

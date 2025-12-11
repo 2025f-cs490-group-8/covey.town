@@ -48,19 +48,19 @@ export default function PlayerName({ player }: PlayerNameProps): JSX.Element {
   };
 
   const isCurrentUser = player.id === townController.userID;
-  
+
   if (isCurrentUser) {
     return <Text>{player.userName}</Text>;
   }
-  
+
   return (
     <HStack spacing={2}>
       <Text>{player.userName}</Text>
       <IconButton
         icon={<AddIcon />}
-        size="xs"
-        colorScheme="blue"
-        variant="ghost"
+        size='xs'
+        colorScheme='blue'
+        variant='ghost'
         aria-label={`Send friend request to ${player.userName}`}
         onClick={handleSendFriendRequest}
         isLoading={sending}

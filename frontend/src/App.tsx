@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ChakraProvider } from '@chakra-ui/react';
 import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
@@ -20,9 +19,21 @@ import TownControllerContext from './contexts/TownControllerContext';
 import LoginControllerContext from './contexts/LoginControllerContext';
 import { TownsServiceClient } from './generated/client';
 import { nanoid } from 'nanoid';
-import { Routes, Route } from 'react-router-dom';
+import Route from 'react-router-dom';
 import Profile from './components/SocialSidebar/Profile';
-import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text, HStack, Divider } from '@chakra-ui/react';
+import {
+  Box,
+  VStack,
+  FormControl,
+  FormLabel,
+  Input,
+  Button,
+  Heading,
+  useToast,
+  Text,
+  HStack,
+  Divider,
+} from '@chakra-ui/react';
 import ToggleChatButton from './components/VideoCall/VideoFrontend/components/Buttons/ToggleChatButton/ToggleChatButton';
 import GoogleLoginButton from './components/Login/GoogleLoginButton';
 
@@ -38,152 +49,155 @@ function App() {
   const { error, setError } = useAppState();
   const connectionOptions = useConnectionOptions();
   const toast = useToast() as any;
-  
+
   const onDisconnect = useCallback(() => {
     townController?.disconnect();
   }, [townController]);
 
- const handleLogin = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (!username || !password) {
-    toast({
-      title: 'Error',
-      description: 'Please enter both username and password',
-      status: 'error',
-      duration: 3000,
-    });
-    return;
-  }
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/login`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username,
-        password,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(errorText || 'Login failed');
+    if (!username || !password) {
+      toast({
+        title: 'Error',
+        description: 'Please enter both username and password',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
     }
 
-    const data = await response.json();
-    console.log('Full login response:', data); 
-    
-    // Use fallback in case accountUsername is missing
-    const accountUsernameValue = data.accountUsername || data.name || username;
-    console.log('App.tsx - Setting accountUsername to:', accountUsernameValue); 
-    
-    setAccountUsername(accountUsernameValue);
-    setIsAuthenticated(true);
-    localStorage.setItem('accountUsername', accountUsernameValue);
-    
-    toast({
-      title: 'Success',
-      description: 'Logged in successfully',
-      status: 'success',
-      duration: 2000,
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    toast({
-      title: 'Login Failed',
-      description: error instanceof Error ? error.message : 'Invalid credentials',
-      status: 'error',
-      duration: 3000,
-    });
-  }
-};
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          password,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Login failed');
+      }
+
+      const data = await response.json();
+      console.log('Full login response:', data);
+
+      // Use fallback in case accountUsername is missing
+      const accountUsernameValue = data.accountUsername || data.name || username;
+      console.log('App.tsx - Setting accountUsername to:', accountUsernameValue);
+
+      setAccountUsername(accountUsernameValue);
+      setIsAuthenticated(true);
+      localStorage.setItem('accountUsername', accountUsernameValue);
+
+      toast({
+        title: 'Success',
+        description: 'Logged in successfully',
+        status: 'success',
+        duration: 2000,
+      });
+    } catch (loginError) {
+      console.error('Login error:', loginError);
+      toast({
+        title: 'Login Failed',
+        description: loginError instanceof Error ? loginError.message : 'Invalid credentials',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
 
   const handleRegister = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  if (!username || !email || !password || !confirmPassword) {
-    toast({
-      title: 'Error',
-      description: 'Please fill in all fields',
-      status: 'error',
-      duration: 3000,
-    });
-    return;
-  }
+    e.preventDefault();
 
-  if (username.includes(" ")){
-    toast({
-      title: 'Error',
-      description: 'Username can not include space',
-      status: 'error',
-      duration: 3000,
-    });
-    return;
-  }
-
-  if (password !== confirmPassword) {
-    toast({
-      title: 'Error',
-      description: 'Passwords do not match',
-      status: 'error',
-      duration: 3000,
-    });
-    return;
-  }
-
-  if (password.length < 6) {
-    toast({
-      title: 'Error',
-      description: 'Password must be at least 6 characters',
-      status: 'error',
-      duration: 3000,
-    });
-    return;
-  }
-
-  try {
-    const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        username,
-        email,
-        password,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.message || 'Registration failed');
+    if (!username || !email || !password || !confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'Please fill in all fields',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
     }
 
-    toast({
-      title: 'Success',
-      description: 'Account created! Please log in.',
-      status: 'success',
-      duration: 3000,
-    });
-    
-    setShowRegister(false);
-    setUsername('');
-    setPassword('');
-    setConfirmPassword('');
-    setEmail('');
-  } catch (error) {
-    toast({
-      title: 'Registration Failed',
-      description: error instanceof Error ? error.message : 'Could not create account',
-      status: 'error',
-      duration: 3000,
-    });
-  }
-};
+    if (username.includes(' ')) {
+      toast({
+        title: 'Error',
+        description: 'Username can not include space',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      toast({
+        title: 'Error',
+        description: 'Passwords do not match',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      toast({
+        title: 'Error',
+        description: 'Password must be at least 6 characters',
+        status: 'error',
+        duration: 3000,
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL}/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username,
+          email,
+          password,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Registration failed');
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Account created! Please log in.',
+        status: 'success',
+        duration: 3000,
+      });
+
+      setShowRegister(false);
+      setUsername('');
+      setPassword('');
+      setConfirmPassword('');
+      setEmail('');
+    } catch (registrationError) {
+      toast({
+        title: 'Registration Failed',
+        description:
+          registrationError instanceof Error
+            ? registrationError.message
+            : 'Could not create account',
+        status: 'error',
+        duration: 3000,
+      });
+    }
+  };
   useEffect(() => {
     const savedUser = localStorage.getItem('accountUsername');
     const googleUser = localStorage.getItem('googleUser');
@@ -193,58 +207,54 @@ function App() {
   }, []);
   if (!isAuthenticated) {
     return (
-      <Box 
-        display="flex" 
-        alignItems="center" 
-        justifyContent="center" 
-        minH="100vh"
-        bgGradient="linear(to-br, blue.400, purple.600)"
-      >
-        <Box 
-          maxW="400px" 
-          w="full" 
-          p={8} 
-          borderRadius="2xl" 
-          boxShadow="2xl"
-          bg="white"
-        >
+      <Box
+        display='flex'
+        alignItems='center'
+        justifyContent='center'
+        minH='100vh'
+        bgGradient='linear(to-br, blue.400, purple.600)'>
+        <Box maxW='400px' w='full' p={8} borderRadius='2xl' boxShadow='2xl' bg='white'>
           {!showRegister ? (
             <form onSubmit={handleLogin} style={{ width: '100%' }}>
               <VStack spacing={6}>
-                <Heading size="lg" color="gray.800">Login to Covey.Town</Heading>
-                
+                <Heading size='lg' color='gray.800'>
+                  Login to Covey.Town
+                </Heading>
+
                 <FormControl isRequired>
                   <FormLabel>Username</FormLabel>
                   <Input
-                    type="text"
+                    type='text'
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Enter username"
+                    onChange={e => setUsername(e.target.value)}
+                    placeholder='Enter username'
                   />
                 </FormControl>
 
                 <FormControl isRequired>
                   <FormLabel>Password</FormLabel>
                   <Input
-                    type="password"
+                    type='password'
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder='Enter password'
                   />
                 </FormControl>
 
-                <Button type="submit" colorScheme="blue" width="100%">
+                <Button type='submit' colorScheme='blue' width='100%'>
                   Login
                 </Button>
 
-                <HStack width="100%" spacing={2}>
+                <HStack width='100%' spacing={2}>
                   <Divider />
-                  <Text fontSize="sm" color="gray.500">OR</Text>
+                  <Text fontSize='sm' color='gray.500'>
+                    OR
+                  </Text>
                   <Divider />
                 </HStack>
 
                 <GoogleLoginButton
-                  onSuccess={(userInfo) => {
+                  onSuccess={userInfo => {
                     // Store the Google email as the account username
                     setAccountUsername(userInfo.email);
                     setIsAuthenticated(true);
@@ -260,17 +270,16 @@ function App() {
                   }}
                 />
 
-                <Text fontSize="sm" color="gray.600">
-                  Don't have an account?{' '}
+                <Text fontSize='sm' color='gray.600'>
+                  Don&apos;t have an account?{' '}
                   <Button
-                    variant="link"
-                    colorScheme="blue"
+                    variant='link'
+                    colorScheme='blue'
                     onClick={() => {
                       setShowRegister(true);
                       setUsername('');
                       setPassword('');
-                    }}
-                  >
+                    }}>
                     Register here
                   </Button>
                 </Text>
@@ -278,66 +287,67 @@ function App() {
             </form>
           ) : (
             <form onSubmit={handleRegister}>
-              <VStack spacing="6">
-                <Heading size="lg" color="gray.800">Create Account</Heading>
-                
+              <VStack spacing='6'>
+                <Heading size='lg' color='gray.800'>
+                  Create Account
+                </Heading>
+
                 <FormControl isRequired>
                   <FormLabel>Username</FormLabel>
                   <Input
-                    type="text"
+                    type='text'
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    placeholder="Choose a username"
+                    onChange={e => setUsername(e.target.value)}
+                    placeholder='Choose a username'
                   />
                 </FormControl>
 
                 <FormControl isRequired>
                   <FormLabel>Email</FormLabel>
                   <Input
-                    type="email"
+                    type='email'
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Enter your email"
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder='Enter your email'
                   />
                 </FormControl>
 
                 <FormControl isRequired>
                   <FormLabel>Password</FormLabel>
                   <Input
-                    type="password"
+                    type='password'
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a password"
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder='Create a password'
                   />
                 </FormControl>
 
                 <FormControl isRequired>
                   <FormLabel>Confirm Password</FormLabel>
                   <Input
-                    type="password"
+                    type='password'
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm your password"
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    placeholder='Confirm your password'
                   />
                 </FormControl>
 
-                <Button type="submit" colorScheme="blue" width="100%">
+                <Button type='submit' colorScheme='blue' width='100%'>
                   Register
                 </Button>
 
-                <Text fontSize="sm" color="gray.600">
+                <Text fontSize='sm' color='gray.600'>
                   Already have an account?{' '}
                   <Button
-                    variant="link"
-                    colorScheme="blue"
+                    variant='link'
+                    colorScheme='blue'
                     onClick={() => {
                       setShowRegister(false);
                       setUsername('');
                       setPassword('');
                       setConfirmPassword('');
                       setEmail('');
-                    }}
-                  >
+                    }}>
                     Login here
                   </Button>
                 </Text>
@@ -360,16 +370,18 @@ function App() {
       </TownControllerContext.Provider>
     );
   } else {
-    // Pass the account username to PreJoinScreens
-    page = <PreJoinScreens accountUsername={accountUsername} />;
+    // removed account username pass to PreJoinScreens
+    // PreJoinScreens was never modified to take it
+    page = <PreJoinScreens />;
   }
-  
+
   const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
   assert(url, 'NEXT_PUBLIC_TOWNS_SERVICE_URL must be defined');
   const townsService = new TownsServiceClient({ BASE: url }).towns;
-  
+
   return (
-    <LoginControllerContext.Provider value={{ setTownController, townsService, accountUsername: accountUsername || '' }}>
+    <LoginControllerContext.Provider
+      value={{ setTownController, townsService, accountUsername: accountUsername || '' }}>
       <UnsupportedBrowserWarning>
         <VideoProvider options={connectionOptions} onError={setError} onDisconnect={onDisconnect}>
           <ErrorDialog dismissError={() => setError(null)} error={error} />
@@ -420,7 +432,7 @@ function DebugApp(): JSX.Element {
         loginController: {
           setTownController: () => {},
           townsService,
-          accountUsername: debugUsername,  // Use same value for debug mode
+          accountUsername: debugUsername, // Use same value for debug mode
         },
         userName: debugUsername,
         accountUsername: debugUsername, // Pass account username
@@ -455,13 +467,13 @@ function AppOrDebugApp(): JSX.Element {
 
 export default function AppStateWrapper(): JSX.Element {
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  
+
   const appContent = (
     <AppStateProvider>
       <AppOrDebugApp />
     </AppStateProvider>
   );
-  
+
   return (
     <BrowserRouter>
       <ChakraProvider>

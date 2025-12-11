@@ -211,9 +211,8 @@ export default class TownsStore {
     for (const town of this._towns) {
       for (const player of town.players) {
         if (excludePlayerId && player.id === excludePlayerId) {
-          continue;
-        }
-        if (player.userName.toLowerCase().includes(searchLower)) {
+          // Skip the excluded player
+        } else if (player.userName.toLowerCase().includes(searchLower)) {
           results.push({
             player,
             town,

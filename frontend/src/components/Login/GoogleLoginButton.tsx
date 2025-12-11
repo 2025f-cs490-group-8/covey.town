@@ -7,26 +7,30 @@ interface GoogleLoginButtonProps {
   onSuccess: (userInfo: { userId: string; email: string; name: string }) => void;
   onError?: (error: Error) => void;
 }
-console.log("🔥 GoogleLoginButton component loaded");
+console.log('🔥 GoogleLoginButton component loaded');
 
-export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginButtonProps): JSX.Element | null {
+export default function GoogleLoginButton({
+  onSuccess,
+  onError,
+}: GoogleLoginButtonProps): JSX.Element | null {
   const toast = useToast();
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-  
 
   React.useEffect(() => {
     console.log('🔍 GoogleLoginButton - Client ID:', googleClientId);
-    console.log('🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:', process.env.GOOGLE_CLIENT_ID);
+    console.log(
+      '🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:',
+      process.env.GOOGLE_CLIENT_ID,
+    );
     console.log('🔍 GoogleLoginButton - Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
   }, [googleClientId]);
-  
+
   const googleLogin = useGoogleLogin({
     flow: 'auth-code',
-    redirect_uri: process.env.GOOGLE_REDIRECT_URI,   
-    onSuccess: async (codeResponse) => {
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
+    onSuccess: async codeResponse => {
       try {
-        const url =
-          process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL; 
+        const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
 
         const response = await fetch(`${url}/auth/google`, {
           method: 'POST',
@@ -53,8 +57,6 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
 
         const userInfo = await response.json();
         onSuccess(userInfo);
-
-      
       } catch (err) {
         const error = err instanceof Error ? err : new Error('Google login failed');
         onError?.(error);
@@ -66,17 +68,19 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
         });
       }
     },
-    onError: (error) => {
+    onError: error => {
       console.error('🚨 Google OAuth Error:', error);
       toast({
         title: 'Google Authorization Error',
-        description: error?.error_description || error?.error || 'Google login failed. Please check your OAuth client configuration in Google Cloud Console.',
+        description:
+          error?.error_description ||
+          error?.error ||
+          'Google login failed. Please check your OAuth client configuration in Google Cloud Console.',
         status: 'error',
         duration: 5000,
       });
     },
   });
-
 
   const handleClick = React.useCallback(() => {
     googleLogin();
@@ -85,30 +89,20 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
   // If Google OAuth is not configured, show a disabled button with helpful message
   if (!googleClientId || googleClientId.length === 0) {
     return (
-      // @ts-ignore - Chakra UI Button has complex union types that TypeScript struggles with
       <Button
         isDisabled
-        colorScheme="gray"
-        variant="outline"
-        width="100%"
-        title="Google OAuth not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env file"
-      >
+        colorScheme='gray'
+        variant='outline'
+        width='100%'
+        title='Google OAuth not configured. Set NEXT_PUBLIC_GOOGLE_CLIENT_ID in your .env file'>
         Sign in with Google (Not Configured)
       </Button>
     );
   }
 
   return (
-    // @ts-ignore - Chakra UI Button has complex union types that TypeScript struggles with
-    <Button
-      onClick={handleClick}
-      colorScheme="red"
-      variant="outline"
-      width="100%"
-      type="button"
-    >
+    <Button onClick={handleClick} colorScheme='red' variant='outline' width='100%' type='button'>
       Sign in with Google
     </Button>
   );
 }
-

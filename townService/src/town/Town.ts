@@ -104,7 +104,7 @@ export default class Town {
   private _teleportCooldowns: Map<string, number> = new Map();
 
   // Teleport cooldown duration in milliseconds (10 seconds)
-  private static readonly TELEPORT_COOLDOWN_MS = 10000;
+  private static readonly _teleportCooldownMs = 10000;
 
   constructor(
     friendlyName: string,
@@ -263,7 +263,7 @@ export default class Town {
         const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
         if (lastTeleportTime) {
           const timeSinceLastTeleport = Date.now() - lastTeleportTime;
-          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          const cooldownRemaining = Town._teleportCooldownMs - timeSinceLastTeleport;
           if (cooldownRemaining > 0) {
             socket.emit('teleportResult', {
               success: false,
@@ -488,7 +488,7 @@ export default class Town {
         const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
         if (lastTeleportTime) {
           const timeSinceLastTeleport = Date.now() - lastTeleportTime;
-          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          const cooldownRemaining = Town._teleportCooldownMs - timeSinceLastTeleport;
           if (cooldownRemaining > 0) {
             socket.emit('crossTownTeleportResult', {
               success: false,
@@ -684,8 +684,13 @@ export default class Town {
           return;
         }
 
-        // Calculate spawn location near the accepting player (same logic as regular teleport)
         const targetLocation = newPlayer.location;
+        // console.log('Cross-town teleport: Accepting player location:', targetLocation);
+
+        // console.log(
+        //   'Cross-town teleport: Sending spawnLocation to requesting player:',
+        //   targetLocation,
+        // );
         console.log('Cross-town teleport: Accepting player location:', targetLocation);
         const offset = 60;
         let spawnX = targetLocation.x;
@@ -728,7 +733,7 @@ export default class Town {
           accepted: true,
           targetTownID: this._townID,
           targetTownName: this._friendlyName,
-          spawnLocation,
+          targetLocation,
         });
 
         // Notify the accepting player that the teleport was successful

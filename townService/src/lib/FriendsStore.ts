@@ -115,7 +115,7 @@ export default class FriendsStore {
       this._friends.get(f.userId)!.push(fr);
     }
 
-    console.log('Friends + Requests loaded from DB');
+    // console.log('Friends + Requests loaded from DB');
   }
 
   /**
@@ -126,9 +126,9 @@ export default class FriendsStore {
     this._dbUserIdToSession.set(databaseUserId, sessionPlayerId);
     this._usernameToPlayerId.set(username, sessionPlayerId);
 
-    console.log(
-      `Registered session: ${sessionPlayerId} -> DB User: ${databaseUserId} (${username})`,
-    );
+    // console.log(
+    //   `Registered session: ${sessionPlayerId} -> DB User: ${databaseUserId} (${username})`,
+    // );
   }
 
   /**
