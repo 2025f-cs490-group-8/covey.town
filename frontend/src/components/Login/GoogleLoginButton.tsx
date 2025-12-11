@@ -7,7 +7,7 @@ interface GoogleLoginButtonProps {
   onSuccess: (userInfo: { userId: string; email: string; name: string }) => void;
   onError?: (error: Error) => void;
 }
-// console.log('🔥 GoogleLoginButton component loaded');
+console.log('🔥 GoogleLoginButton component loaded');
 
 export default function GoogleLoginButton({
   onSuccess,
@@ -17,20 +17,17 @@ export default function GoogleLoginButton({
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
   React.useEffect(() => {
-    // console.log('🔍 GoogleLoginButton - Client ID:', googleClientId);
-    // console.log(
-    //  '🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:',
-    //  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-    // );
-    // console.log(
-    //   '🔍 GoogleLoginButton - Redirect URI:',
-    //   process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
-    // );
+    console.log('🔍 GoogleLoginButton - Client ID:', googleClientId);
+    console.log(
+      '🔍 GoogleLoginButton - NEXT_PUBLIC_GOOGLE_CLIENT_ID from env:',
+      process.env.GOOGLE_CLIENT_ID,
+    );
+    console.log('🔍 GoogleLoginButton - Redirect URI:', process.env.GOOGLE_REDIRECT_URI);
   }, [googleClientId]);
 
   const googleLogin = useGoogleLogin({
     flow: 'auth-code',
-    redirect_uri: process.env.NEXT_PUBLIC_GOOGLE_REDIRECT_URI,
+    redirect_uri: process.env.GOOGLE_REDIRECT_URI,
     onSuccess: async codeResponse => {
       try {
         const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;

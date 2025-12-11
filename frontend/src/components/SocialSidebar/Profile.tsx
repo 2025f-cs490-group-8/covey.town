@@ -789,56 +789,56 @@ export default function Profile(): JSX.Element {
   };
 
   const handleUnblockUser = async (userId: string, userName: string) => {
-    try {
-      const result = await townController.unblockUser(userId);
-      // Remove from blocked users list
-      setBlockedUsers(prev => prev.filter(user => user.blockedId !== userId));
+  try {
+    const result = await townController.unblockUser(userId);
+    // Remove from blocked users list
+    setBlockedUsers(prev => prev.filter(user => user.blockedId !== userId));
 
-      // If the friendship was restored, add them back to friends list
-      if (result.friendRestored && result.friend) {
-        const restoredFriend = result.friend; // Extract friend to preserve type narrowing
-        setFriends(prev => {
-          // Check if they're not already in the list
-          if (!prev.some(f => f.friendId === restoredFriend.friendId)) {
-            return [
-              ...prev,
-              {
-                friendId: restoredFriend.friendId,
-                friendUserName: restoredFriend.friendUserName,
-                friendStatus: restoredFriend.friendStatus as UserStatus,
-                friendTownID: restoredFriend.friendTownID,
-                friendTownName: restoredFriend.friendTownName,
-              },
-            ];
-          }
-          return prev;
-        });
-        toast({
-          title: 'User Unblocked',
-          description: `${userName} has been unblocked and restored to your friends list.`,
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      } else {
-        toast({
-          title: 'User Unblocked',
-          description: `${userName} has been unblocked. They had already removed you from their friends list, so you'll need to send a new friend request.`,
-          status: 'info',
-          duration: 5000,
-          isClosable: true,
-        });
-      }
-    } catch (err) {
+    // If the friendship was restored, add them back to friends list
+    if (result.friendRestored && result.friend) {
+      const restoredFriend = result.friend; // Extract friend to preserve type narrowing
+      setFriends(prev => {
+        // Check if they're not already in the list
+        if (!prev.some(f => f.friendId === restoredFriend.friendId)) {
+          return [
+            ...prev,
+            {
+              friendId: restoredFriend.friendId,
+              friendUserName: restoredFriend.friendUserName,
+              friendStatus: restoredFriend.friendStatus as UserStatus,
+              friendTownID: restoredFriend.friendTownID,
+              friendTownName: restoredFriend.friendTownName,
+            },
+          ];
+        }
+        return prev;
+      });
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Failed to unblock user',
-        status: 'error',
+        title: 'User Unblocked',
+        description: `${userName} has been unblocked and restored to your friends list.`,
+        status: 'success',
         duration: 3000,
         isClosable: true,
       });
+    } else {
+      toast({
+        title: 'User Unblocked',
+        description: `${userName} has been unblocked. They had already removed you from their friends list, so you'll need to send a new friend request.`,
+        status: 'info',
+        duration: 5000,
+        isClosable: true,
+      });
     }
-  };
+  } catch (err) {
+    toast({
+      title: 'Error',
+      description: err instanceof Error ? err.message : 'Failed to unblock user',
+      status: 'error',
+      duration: 3000,
+      isClosable: true,
+    });
+  }
+};
   // Search for players across all towns when search query changes
   useEffect(() => {
     const searchPlayers = async () => {
@@ -1375,44 +1375,44 @@ export default function Profile(): JSX.Element {
             )}
           </Flex>
 
-          {showBlockedUsers && blockedUsers.length > 0 && (
-            <VStack spacing={2} align='stretch' maxH='200px' overflowY='auto'>
-              {blockedUsers.map(blockedUser => (
-                <Box
-                  key={blockedUser.blockedId}
-                  p={3}
-                  borderWidth='1px'
-                  borderRadius='md'
-                  borderColor={borderColor}
-                  bg='red.50'>
-                  <Flex align='center'>
-                    <Avatar size='sm' name={blockedUser.blockedUserName} mr={3} />
-                    <Box flex={1}>
-                      <Text fontWeight='medium'>{blockedUser.blockedUserName}</Text>
-                      <Text fontSize='xs' color='gray.500'>
-                        Blocked on {blockedUser.createdAt.toLocaleDateString()}
-                      </Text>
-                    </Box>
-                    <Button
-                      size='sm'
-                      colorScheme='green'
-                      variant='outline'
-                      onClick={() =>
-                        handleUnblockUser(blockedUser.blockedId, blockedUser.blockedUserName)
-                      }>
-                      Unblock
-                    </Button>
-                  </Flex>
-                </Box>
-              ))}
-            </VStack>
-          )}
-
-          {blockedUsers.length === 0 && (
-            <Text color='gray.500' textAlign='center' py={2}>
-              No blocked users
+         {showBlockedUsers && blockedUsers.length > 0 && (
+  <VStack spacing={2} align='stretch' maxH='200px' overflowY='auto'>
+    {blockedUsers.map(blockedUser => (
+      <Box
+        key={blockedUser.blockedId}
+        p={3}
+        borderWidth='1px'
+        borderRadius='md'
+        borderColor={borderColor}
+        bg='red.50'>
+        <Flex align='center'>
+          <Avatar size='sm' name={blockedUser.blockedUserName} mr={3} />
+          <Box flex={1}>
+            <Text fontWeight='medium'>{blockedUser.blockedUserName}</Text>
+            <Text fontSize='xs' color='gray.500'>
+              Blocked on {blockedUser.createdAt.toLocaleDateString()}
             </Text>
-          )}
+          </Box>
+          <Button
+            size='sm'
+            colorScheme='green'
+            variant='outline'
+            onClick={() =>
+              handleUnblockUser(blockedUser.blockedId, blockedUser.blockedUserName)
+            }>
+            Unblock
+          </Button>
+        </Flex>
+      </Box>
+    ))}
+  </VStack>
+)}
+
+{blockedUsers.length === 0 && (
+  <Text color='gray.500' textAlign='center' py={2}>
+    No blocked users
+  </Text>
+)}
         </Box>
 
         <Divider />
