@@ -472,6 +472,7 @@ useEffect(() => {
           userName: username,
           townID: townID,
           loginController,
+          accountUsername: loginController.accountUsername,
           spawnLocation,
         });
         
