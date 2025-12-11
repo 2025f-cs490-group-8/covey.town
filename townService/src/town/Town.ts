@@ -128,9 +128,13 @@ export default class Town {
    * @param socket The socket connection for this player
    * @param spawnLocation Optional spawn location for cross-town teleportation
    */
-  async addPlayer(userName: string, socket: CoveyTownSocket, spawnLocation?: { x: number; y: number; rotation: string; moving: boolean }): Promise<Player> {
+  async addPlayer(
+    userName: string,
+    socket: CoveyTownSocket,
+    spawnLocation?: { x: number; y: number; rotation: string; moving: boolean },
+  ): Promise<Player> {
     const newPlayer = new Player(userName, socket.to(this._townID));
-    
+
     // Apply spawn location if provided (for cross-town teleportation)
     if (spawnLocation) {
       newPlayer.location = {
@@ -140,7 +144,7 @@ export default class Town {
         moving: spawnLocation.moving,
       };
     }
-    
+
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
@@ -702,7 +706,7 @@ export default class Town {
             break;
           default:
             spawnX = targetLocation.x + offset;
-            spawnY = targetLocation.y + (offset / 2);
+            spawnY = targetLocation.y + offset / 2;
             break;
         }
 
@@ -712,7 +716,10 @@ export default class Town {
           rotation: targetLocation.rotation,
           moving: false,
         };
-        console.log('Cross-town teleport: Sending spawnLocation to requesting player:', spawnLocation);
+        console.log(
+          'Cross-town teleport: Sending spawnLocation to requesting player:',
+          spawnLocation,
+        );
 
         // Notify the requesting player that their request was accepted, include spawn location
         // They will switch to this town and spawn at the specified location
