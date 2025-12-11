@@ -1,13 +1,3 @@
-/**
- * Teleportation Feature Tests
- *
- * These tests verify the core functionality needed for player teleportation:
- * - Player tracking and management
- * - Friend relationships
- * - Location management
- * - Cross-town player lookup
- */
-
 describe('TeleportationFeature - Core Infrastructure', () => {
   describe('Player Location Tracking', () => {
     it('should have a location object with required properties', () => {
