@@ -85,7 +85,6 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
   // If Google OAuth is not configured, show a disabled button with helpful message
   if (!googleClientId || googleClientId.length === 0) {
     return (
-      // @ts-ignore - Chakra UI Button has complex union types that TypeScript struggles with
       <Button
         isDisabled
         colorScheme="gray"
@@ -99,7 +98,6 @@ export default function GoogleLoginButton({ onSuccess, onError }: GoogleLoginBut
   }
 
   return (
-    // @ts-ignore - Chakra UI Button has complex union types that TypeScript struggles with
     <Button
       onClick={handleClick}
       colorScheme="red"

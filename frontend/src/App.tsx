@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { ChakraProvider } from '@chakra-ui/react';
 import { MuiThemeProvider } from '@material-ui/core/styles';
 import assert from 'assert';
@@ -20,7 +19,7 @@ import TownControllerContext from './contexts/TownControllerContext';
 import LoginControllerContext from './contexts/LoginControllerContext';
 import { TownsServiceClient } from './generated/client';
 import { nanoid } from 'nanoid';
-import { Routes, Route } from 'react-router-dom';
+import Route from 'react-router-dom';
 import Profile from './components/SocialSidebar/Profile';
 import { Box, VStack, FormControl, FormLabel, Input, Button, Heading, useToast, Text, HStack, Divider } from '@chakra-ui/react';
 import ToggleChatButton from './components/VideoCall/VideoFrontend/components/Buttons/ToggleChatButton/ToggleChatButton';
@@ -360,8 +359,9 @@ function App() {
       </TownControllerContext.Provider>
     );
   } else {
-    // Pass the account username to PreJoinScreens
-    page = <PreJoinScreens accountUsername={accountUsername} />;
+    // removed account username pass to PreJoinScreens
+    // PreJoinScreens was never modified to take it
+    page = <PreJoinScreens />;
   }
   
   const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
