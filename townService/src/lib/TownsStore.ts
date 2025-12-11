@@ -1,7 +1,7 @@
 import { ITiledMap } from '@jonbell/tiled-map-type-guard';
 import * as fs from 'fs/promises';
 import { customAlphabet } from 'nanoid';
-import type Town from '../town/Town';
+import Town from '../town/Town';
 import { TownEmitterFactory } from '../types/CoveyTownSocket';
 import Player from './Player';
 

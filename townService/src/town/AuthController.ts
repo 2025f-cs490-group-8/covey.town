@@ -9,7 +9,7 @@ import { QuerySQL, connection } from '../api/SqlCalls';
  */
 @Route('auth')
 @Tags('auth')
-export default class AuthController extends Controller {
+export class AuthController extends Controller {
   private _userStore: UserStore = UserStore.getInstance();
 
   private _db = new QuerySQL();
