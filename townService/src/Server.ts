@@ -22,11 +22,11 @@ const DIRNAME = path.dirname(FILENAME);
 
 dotenv.config({ path: path.resolve(DIRNAME, '../.env') });
 
-console.log('DB CONFIG:', {
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  db: process.env.DB_NAME,
-});
+// console.log('DB CONFIG:', {
+//   host: process.env.DB_HOST,
+//   user: process.env.DB_USER,
+//   db: process.env.DB_NAME,
+// });
 
 // Create the server instances
 const app = Express();

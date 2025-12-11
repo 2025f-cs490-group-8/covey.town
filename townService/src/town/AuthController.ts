@@ -26,19 +26,18 @@ export class AuthController extends Controller {
     // IMPORTANT: This redirect URI MUST match exactly what's configured in Google Cloud Console
     const redirectUri = process.env.GOOGLE_REDIRECT_URI;
 
-    console.log('Google OAuth Configuration:', {
-      clientId: googleClientId,
-      hasClientId: !!googleClientId,
-      hasClientSecret: !!googleClientSecret,
-      redirectUri,
-      clientIdSource: process.env.GOOGLE_CLIENT_ID ? 'env' : 'hardcoded',
-    });
-
+    // console.log('Google OAuth Configuration:', {
+    //   clientId: googleClientId,
+    //   hasClientId: !!googleClientId,
+    //   hasClientSecret: !!googleClientSecret,
+    //   redirectUri,
+    //   clientIdSource: process.env.GOOGLE_CLIENT_ID ? 'env' : 'hardcoded',
+    // });
     if (googleClientId && googleClientSecret) {
       // OAuth2Client doesn't need redirectUri in constructor - it's passed to getToken()
       this._googleClient = new OAuth2Client(googleClientId, googleClientSecret);
-      console.log('Google OAuth client initialized successfully');
-      console.log('Using redirect URI:', redirectUri);
+      // console.log('Google OAuth client initialized successfully');
+      // console.log('Using redirect URI:', redirectUri);
     } else {
       console.error('Google OAuth NOT configured. Missing Client ID or Secret.');
       console.error(
@@ -59,7 +58,7 @@ export class AuthController extends Controller {
     @Body() body: { username: string; password: string },
   ): Promise<{ userId: number; email: string; name: string; accountUsername: string }> {
     // Add accountUsername
-    console.log('LOGIN REQUEST:', body);
+    // console.log('LOGIN REQUEST:', body);
 
     const { username, password } = body;
 
@@ -103,7 +102,7 @@ export class AuthController extends Controller {
     @Body() body: { username: string; email: string; password: string },
   ): Promise<{ message: string; accountUsername: string }> {
     // Add accountUsername
-    console.log('REGISTER REQUEST BODY:', body);
+    // console.log('REGISTER REQUEST BODY:', body);
 
     const { username, email, password } = body;
 
@@ -122,7 +121,7 @@ export class AuthController extends Controller {
     }
 
     try {
-      console.log('Creating user in DB:', { username, email });
+      // console.log('Creating user in DB:', { username, email });
       await this._db.constructNewUser(username, email, password);
     } catch (err: any) {
       console.error('MYSQL INSERT ERROR:', err);
@@ -167,7 +166,7 @@ export class AuthController extends Controller {
       if (requestBody.code) {
         // The redirect_uri MUST match exactly what was used in the frontend authorization request
         const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-        console.log('Exchanging code for tokens with redirect_uri:', redirectUri);
+        // console.log('Exchanging code for tokens with redirect_uri:', redirectUri);
 
         const { tokens } = await this._googleClient.getToken({
           code: requestBody.code,

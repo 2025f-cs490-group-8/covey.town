@@ -86,7 +86,6 @@ export default function Profile(): JSX.Element {
   const { connect: videoConnect, room: videoRoom, getAudioAndVideoTracks } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
-  const hoverBgColor = useColorModeValue('gray.50', 'gray.700');
   const friendBlockedBg = useColorModeValue('red.50', 'red.900');
   const friendBlockedHoverBg = useColorModeValue('red.100', 'red.800');
   const friendRequestHoverBg = useColorModeValue('gray.50', 'gray.700');

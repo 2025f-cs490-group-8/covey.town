@@ -685,12 +685,12 @@ export default class Town {
         }
 
         const targetLocation = newPlayer.location;
-        console.log('Cross-town teleport: Accepting player location:', targetLocation);
+        // console.log('Cross-town teleport: Accepting player location:', targetLocation);
 
-        console.log(
-          'Cross-town teleport: Sending spawnLocation to requesting player:',
-          targetLocation,
-        );
+        // console.log(
+        //   'Cross-town teleport: Sending spawnLocation to requesting player:',
+        //   targetLocation,
+        // );
 
         // Notify the requesting player that their request was accepted, include spawn location
         // They will switch to this town and spawn at the specified location
