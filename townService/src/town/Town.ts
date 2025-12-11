@@ -104,7 +104,7 @@ export default class Town {
   private _teleportCooldowns: Map<string, number> = new Map();
 
   // Teleport cooldown duration in milliseconds (10 seconds)
-  private static readonly TELEPORT_COOLDOWN_MS = 10000;
+  private static readonly _teleportCooldownMs = 10000;
 
   constructor(
     friendlyName: string,
@@ -128,9 +128,13 @@ export default class Town {
    * @param socket The socket connection for this player
    * @param spawnLocation Optional spawn location for cross-town teleportation
    */
-  async addPlayer(userName: string, socket: CoveyTownSocket, spawnLocation?: { x: number; y: number; rotation: string; moving: boolean }): Promise<Player> {
+  async addPlayer(
+    userName: string,
+    socket: CoveyTownSocket,
+    spawnLocation?: { x: number; y: number; rotation: string; moving: boolean },
+  ): Promise<Player> {
     const newPlayer = new Player(userName, socket.to(this._townID));
-    
+
     // Apply spawn location if provided (for cross-town teleportation)
     if (spawnLocation) {
       newPlayer.location = {
@@ -140,7 +144,7 @@ export default class Town {
         moving: spawnLocation.moving,
       };
     }
-    
+
     this._players.push(newPlayer);
 
     this._connectedSockets.add(socket);
@@ -259,7 +263,7 @@ export default class Town {
         const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
         if (lastTeleportTime) {
           const timeSinceLastTeleport = Date.now() - lastTeleportTime;
-          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          const cooldownRemaining = Town._teleportCooldownMs - timeSinceLastTeleport;
           if (cooldownRemaining > 0) {
             socket.emit('teleportResult', {
               success: false,
@@ -484,7 +488,7 @@ export default class Town {
         const lastTeleportTime = this._teleportCooldowns.get(newPlayer.id);
         if (lastTeleportTime) {
           const timeSinceLastTeleport = Date.now() - lastTeleportTime;
-          const cooldownRemaining = Town.TELEPORT_COOLDOWN_MS - timeSinceLastTeleport;
+          const cooldownRemaining = Town._teleportCooldownMs - timeSinceLastTeleport;
           if (cooldownRemaining > 0) {
             socket.emit('crossTownTeleportResult', {
               success: false,
@@ -680,39 +684,13 @@ export default class Town {
           return;
         }
 
-        // Calculate spawn location near the accepting player (same logic as regular teleport)
         const targetLocation = newPlayer.location;
         console.log('Cross-town teleport: Accepting player location:', targetLocation);
-        const offset = 60;
-        let spawnX = targetLocation.x;
-        let spawnY = targetLocation.y;
 
-        switch (targetLocation.rotation) {
-          case 'front':
-            spawnY = targetLocation.y + offset;
-            break;
-          case 'back':
-            spawnY = targetLocation.y - offset;
-            break;
-          case 'left':
-            spawnX = targetLocation.x - offset;
-            break;
-          case 'right':
-            spawnX = targetLocation.x + offset;
-            break;
-          default:
-            spawnX = targetLocation.x + offset;
-            spawnY = targetLocation.y + (offset / 2);
-            break;
-        }
-
-        const spawnLocation = {
-          x: spawnX,
-          y: spawnY,
-          rotation: targetLocation.rotation,
-          moving: false,
-        };
-        console.log('Cross-town teleport: Sending spawnLocation to requesting player:', spawnLocation);
+        console.log(
+          'Cross-town teleport: Sending spawnLocation to requesting player:',
+          targetLocation,
+        );
 
         // Notify the requesting player that their request was accepted, include spawn location
         // They will switch to this town and spawn at the specified location
@@ -721,7 +699,7 @@ export default class Town {
           accepted: true,
           targetTownID: this._townID,
           targetTownName: this._friendlyName,
-          spawnLocation,
+          targetLocation,
         });
 
         // Notify the accepting player that the teleport was successful

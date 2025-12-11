@@ -889,7 +889,7 @@ export class TownsController extends Controller {
     assert(newPlayer.videoToken);
     console.log('Generated token:', newPlayer.videoToken);
     console.log('Display Name:', newPlayer.userName);
-    
+
     // Use accountUsername if provided, otherwise fall back to userName
     const effectiveAccountUsername = accountUsername || userName;
     console.log('Account Username:', effectiveAccountUsername);
@@ -900,7 +900,11 @@ export class TownsController extends Controller {
     // Register this session with the FriendsStore using the account username
     // accountUsername is the persistent identifier (e.g., "t" from login)
     // userName is the display name in the town (e.g., "wahgiotghwaioghwa")
-    this._friendsStore.registerSession(newPlayer.id, effectiveAccountUsername, effectiveAccountUsername);
+    this._friendsStore.registerSession(
+      newPlayer.id,
+      effectiveAccountUsername,
+      effectiveAccountUsername,
+    );
 
     // Set default status to Online when user joins
     this._friendsStore.setUserStatus(effectiveAccountUsername, 'Online');

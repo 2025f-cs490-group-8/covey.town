@@ -1,5 +1,3 @@
-/* eslint-disable prettier/prettier */
-
 import { createPool } from 'mysql2/promise';
 import * as bcrypt from 'bcrypt';
 import dotenv from 'dotenv';

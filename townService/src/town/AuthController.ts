@@ -1,5 +1,3 @@
-/* eslint-disable import/prefer-default-export */
-/* eslint-disable prettier/prettier */
 import { Body, Controller, Post, Response, Route, Tags } from 'tsoa';
 import { OAuth2Client } from 'google-auth-library';
 import InvalidParametersError from '../lib/InvalidParametersError';
@@ -11,7 +9,7 @@ import { QuerySQL, connection } from '../api/SqlCalls';
  */
 @Route('auth')
 @Tags('auth')
-export class AuthController extends Controller {
+export default class AuthController extends Controller {
   private _userStore: UserStore = UserStore.getInstance();
 
   private _db = new QuerySQL();
@@ -56,42 +54,43 @@ export class AuthController extends Controller {
    * -------------------------
    */
   @Post('login')
-@Response<InvalidParametersError>(400, 'Invalid username or password')
-public async login(
-  @Body() body: { username: string; password: string },
-): Promise<{ userId: number; email: string; name: string; accountUsername: string }> { // Add accountUsername
-  console.log('LOGIN REQUEST:', body);
+  @Response<InvalidParametersError>(400, 'Invalid username or password')
+  public async login(
+    @Body() body: { username: string; password: string },
+  ): Promise<{ userId: number; email: string; name: string; accountUsername: string }> {
+    // Add accountUsername
+    console.log('LOGIN REQUEST:', body);
 
-  const { username, password } = body;
+    const { username, password } = body;
 
-  if (!username || !password) {
-    throw new InvalidParametersError('Username and password required');
+    if (!username || !password) {
+      throw new InvalidParametersError('Username and password required');
+    }
+
+    const [rows] = await connection.execute<any[]>(
+      'SELECT id, userName, email FROM Users WHERE userName = ?',
+      [username],
+    );
+
+    if (!rows || rows.length === 0) {
+      throw new InvalidParametersError('Invalid username or password');
+    }
+
+    const user = rows[0];
+
+    const valid = await this._db.passwordChallenge(password, user.id);
+
+    if (!valid) {
+      throw new InvalidParametersError('Invalid username or password');
+    }
+
+    return {
+      userId: user.id,
+      email: user.email,
+      name: user.userName,
+      accountUsername: user.userName, // Add this line
+    };
   }
-
-  const [rows] = await connection.execute<any[]>(
-    'SELECT id, userName, email FROM Users WHERE userName = ?',
-    [username],
-  );
-
-  if (!rows || rows.length === 0) {
-    throw new InvalidParametersError('Invalid username or password');
-  }
-
-  const user = rows[0];
-
-  const valid = await this._db.passwordChallenge(password, user.id);
-
-  if (!valid) {
-    throw new InvalidParametersError('Invalid username or password');
-  }
-
-  return {
-    userId: user.id,
-    email: user.email,
-    name: user.userName,
-    accountUsername: user.userName, // Add this line
-  };
-}
 
   /**
    * -------------------------
@@ -99,53 +98,54 @@ public async login(
    * -------------------------
    */
   @Post('register')
-@Response<InvalidParametersError>(400, 'Invalid registration data')
-public async register(
-  @Body() body: { username: string; email: string; password: string },
-): Promise<{ message: string; accountUsername: string }> { // Add accountUsername
-  console.log('REGISTER REQUEST BODY:', body);
+  @Response<InvalidParametersError>(400, 'Invalid registration data')
+  public async register(
+    @Body() body: { username: string; email: string; password: string },
+  ): Promise<{ message: string; accountUsername: string }> {
+    // Add accountUsername
+    console.log('REGISTER REQUEST BODY:', body);
 
-  const { username, email, password } = body;
+    const { username, email, password } = body;
 
-  if (!username || !email || !password) {
-    throw new InvalidParametersError('All fields required');
-  }
-
-  // Check if username exists
-  const [rows] = await connection.execute<any[]>(
-    'SELECT userName FROM Users WHERE userName = ?',
-    [username],
-  );
-
-  if (rows.length > 0) {
-    throw new InvalidParametersError('Username already exists');
-  }
-
-  try {
-    console.log('Creating user in DB:', { username, email });
-    await this._db.constructNewUser(username, email, password);
-  } catch (err: any) {
-    console.error('MYSQL INSERT ERROR:', err);
-    let errorMessage = 'Database insert failed';
-    if (err instanceof Error) {
-      errorMessage = err.message;
-    } else if (err?.code) {
-      if (err.code === 'ER_DUP_ENTRY') {
-        errorMessage = 'Username or email already exists';
-      } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
-        errorMessage = 'Database connection failed. Please check database configuration.';
-      } else {
-        errorMessage = err.message || `Database error: ${err.code}`;
-      }
+    if (!username || !email || !password) {
+      throw new InvalidParametersError('All fields required');
     }
-    throw new InvalidParametersError(errorMessage);
-  }
 
-  return { 
-    message: 'User registered successfully',
-    accountUsername: username, // Add this line
-  };
-}
+    // Check if username exists
+    const [rows] = await connection.execute<any[]>(
+      'SELECT userName FROM Users WHERE userName = ?',
+      [username],
+    );
+
+    if (rows.length > 0) {
+      throw new InvalidParametersError('Username already exists');
+    }
+
+    try {
+      console.log('Creating user in DB:', { username, email });
+      await this._db.constructNewUser(username, email, password);
+    } catch (err: any) {
+      console.error('MYSQL INSERT ERROR:', err);
+      let errorMessage = 'Database insert failed';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+      } else if (err?.code) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          errorMessage = 'Username or email already exists';
+        } else if (err.code === 'ECONNREFUSED' || err.code === 'ETIMEDOUT') {
+          errorMessage = 'Database connection failed. Please check database configuration.';
+        } else {
+          errorMessage = err.message || `Database error: ${err.code}`;
+        }
+      }
+      throw new InvalidParametersError(errorMessage);
+    }
+
+    return {
+      message: 'User registered successfully',
+      accountUsername: username, // Add this line
+    };
+  }
 
   /**
    * -------------------------
