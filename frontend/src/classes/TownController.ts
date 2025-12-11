@@ -999,7 +999,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
    * @param userId The ID of the user to block
    */
   public async blockUser(userId: string): Promise<void> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/block`, {
       method: 'POST',
       headers: {
@@ -1035,7 +1035,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
       friendTownName?: string;
     };
   }> {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/unblock`, {
       method: 'POST',
       headers: {
@@ -1067,7 +1067,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   public async getBlockedUsers(): Promise<
     Array<{ blockedId: string; blockedUserName: string; createdAt: Date }>
   > {
-    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL || 'http://localhost:8081';
+    const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/blocked`, {
       method: 'GET',
       headers: {
