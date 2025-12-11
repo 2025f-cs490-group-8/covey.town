@@ -654,11 +654,6 @@ export class TownsController extends Controller {
     const accountUsername = this._friendsStore.getDatabaseUserId(player.id);
     const friendAccountUsername = this._friendsStore.getDatabaseUserId(requestBody.friendId);
 
-    // Check if they are friends (using account usernames)
-    if (!this._friendsStore.areFriends(accountUsername, friendAccountUsername)) {
-      throw new InvalidParametersError('Users are not friends');
-    }
-
     // Get friend info before removing
     const friends = this._friendsStore.getFriends(accountUsername);
     const friend = friends.find(f => f.friendId === friendAccountUsername);
