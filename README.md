@@ -23,14 +23,36 @@ To create an account and configure your local environment:
 
 1. Go to [Twilio](https://www.twilio.com/) and create an account. You do not need to provide a credit card to create a trial account.
 2. Create an API key and secret (select "API Keys" on the left under "Settings")
-3. Create a `.env` file in the `townService` directory, setting the values as follows:
+3. Create a `.env` file in the `townService` directory with the following environment variables:
 
-| Config Value            | Description                               |
-| ----------------------- | ----------------------------------------- |
-| `TWILIO_ACCOUNT_SID`    | Visible on your twilio account dashboard. |
-| `TWILIO_API_KEY_SID`    | The SID of the new API key you created.   |
-| `TWILIO_API_KEY_SECRET` | The secret for the API key you created.   |
-| `TWILIO_API_AUTH_TOKEN` | Visible on your twilio account dashboard. |
+#### Required Environment Variables
+
+| Config Value            | Description                               | Where to Find It                                    |
+| ----------------------- | ----------------------------------------- | --------------------------------------------------- |
+| `TWILIO_ACCOUNT_SID`    | Your Twilio Account SID                   | Visible on your [Twilio account dashboard](https://console.twilio.com/) under "Account Info" |
+| `TWILIO_API_KEY_SID`    | The SID of the API key you created        | Created when you create an API key (select "API Keys" under "Settings" in Twilio console) |
+| `TWILIO_API_KEY_SECRET` | The secret for the API key you created    | Shown only once when you create the API key - save it immediately! |
+| `TWILIO_API_AUTH_TOKEN` | Your Twilio Auth Token                    | Visible on your [Twilio account dashboard](https://console.twilio.com/) under "Account Info" |
+
+#### Database Configuration (Required if using database features)
+
+| Config Value | Description                    | Default | Where to Get It                                                                         |
+| ------------ | -------------------------------| ------- | ----------------------------------------------------------------------------------------|
+| `DB_HOST`    | MySQL database host address    | ------- | Your database provider (e.g., `localhost` for local MySQL, or your cloud database host) |
+| `DB_PORT`    | MySQL database port number     | `3306`  | Standard MySQL port is 3306, or your database provider's port                           |
+| `DB_USER`    | MySQL database username        | ------- | Created when setting up your MySQL database                                             |
+| `DB_PASSWORD`| MySQL database password        | ------- | Set when creating your MySQL database user                                              |
+| `DB_NAME`    | MySQL database name            | ------- | The name of your database (create it if it doesn't exist)                               |
+
+#### Google OAuth Configuration 
+
+| Config Value          | Description                    | Where to Get It |
+| ----------------------| -------------------------------| --------------- |
+| `GOOGLE_CLIENT_ID`    | Google OAuth 2.0 Client ID     | [Google Cloud Console](https://console.cloud.google.com/) → APIs & Services → Credentials → Create OAuth 2.0 Client ID |
+| `GOOGLE_CLIENT_SECRET`| Google OAuth 2.0 Client Secret | Same as above - shown when you create the OAuth client |
+| `GOOGLE_REDIRECT_URI` | OAuth redirect URI             | Must match the URI configured in your Google OAuth client (e.g., `http://localhost:8081/auth/google/callback`) |
+
+
 
 ### Starting the backend
 
@@ -39,12 +61,26 @@ The backend will automatically restart if you change any of the files in the `to
 
 ### Configuring the frontend
 
-Create a `.env` file in the `frontend` directory, with the line: `NEXT_PUBLIC_TOWNS_SERVICE_URL=http://localhost:8081` (if you deploy the towns service to another location, put that location here instead)
+Create a `.env` file in the `frontend` directory with the following environment variables:
 
-For ease of debugging, you might also set the environmental variable `NEXT_PUBLIC_TOWN_DEV_MODE=true`. When set to `true`, the frontend will
-automatically connect to the town with the friendly name "DEBUG_TOWN" (creating one if needed), and will *not* try to connect to the Twilio API. This is useful if you want to quickly test changes to the frontend (reloading the page and re-acquiring video devices can be much slower than re-loading without Twilio).
+#### Required Environment Variables
+
+| Config Value                    | Description                      | Example Value                                                                |
+| ------------                    | -----------                      | -------------                                                                |
+| `NEXT_PUBLIC_TOWNS_SERVICE_URL` | URL of the backend towns service | `http://localhost:8081` (for local development) or your deployed backend URL |
+
+#### Optional Environment Variables (Make sure to create `.env.local` file in the `frontend` directory)
+
+| Config Value                       | Description                      | Where to find                                                                |
+| ------------                       | -----------                      | -------------                                                                |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID`     | Google OAuth 2.0 Client ID       | Enter the same ID from `.env` file in townService                            |
+| `NEXT_PUBLIC_TOWNS_SERVICE_URI`    | URL of the backend towns service | Enter the same URI in `.env` file in frontend                                |
+| `NEXT_PUBLIC_GOOGLE_REDIRECT_URI`  | OATH Redirect URI                | Enter the same URI in `.env` file in townService                             |  
+
+
+
 
 ### Running the frontend
 
 In the `frontend` directory, run `npm start` (again, you'll need to run `npm install` the very first time). After several moments (or minutes, depending on the speed of your machine), a browser will open with the frontend running locally.
-The frontend will automatically re-compile and reload in your browser if you change any files in the `frontend/src` directory.
+The frontend will automatically re-compile and reload in your browser if you change any files in the `frontend/src` directory.  
