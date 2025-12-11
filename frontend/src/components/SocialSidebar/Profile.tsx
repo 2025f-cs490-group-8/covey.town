@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -42,6 +41,7 @@ import { ArrowRightIcon } from '@chakra-ui/icons';
 import useLoginController from '../../hooks/useLoginController';
 import useVideoContext from '../VideoCall/VideoFrontend/hooks/useVideoContext/useVideoContext';
 
+type Direction = 'front' | 'back' | 'left' | 'right';
 type UserStatus = 'Online' | 'Busy' | 'Offline';
 
 interface Friend {
@@ -187,7 +187,7 @@ export default function Profile(): JSX.Element {
   }
 };
 useEffect(() => {
-  const handler = (payload) => {
+  const handler = (payload:{ fromUserId: string; fromUserName: string }) => {
     setIncomingTeleport(payload);
     teleportModal.onOpen();
   };
@@ -443,7 +443,7 @@ useEffect(() => {
 
   // Handle town switching for cross-town teleport
   useEffect(() => {
-    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string; spawnLocation?: { x: number; y: number; rotation: string; moving: boolean } }>) => {
+    const handleSwitchTown = async (event: CustomEvent<{ townID: string; townName?: string; spawnLocation?: { x: number; y: number; rotation: Direction; moving: boolean } }>) => {
       const { townID, townName, spawnLocation } = event.detail;
       console.log('handleSwitchTown: received spawnLocation =', spawnLocation);
       try {
@@ -514,9 +514,9 @@ useEffect(() => {
       }
     };
 
-    window.addEventListener('switchTown', handleSwitchTown as EventListener);
+    window.addEventListener('switchTown', handleSwitchTown as unknown as EventListener);
     return () => {
-      window.removeEventListener('switchTown', handleSwitchTown as EventListener);
+      window.removeEventListener('switchTown', handleSwitchTown as unknown as EventListener);
     };
   }, [townController, loginController, username, toast, videoConnect, videoRoom, getAudioAndVideoTracks]);
 

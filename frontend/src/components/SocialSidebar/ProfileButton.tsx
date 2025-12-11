@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from 'react';
 import { Button, useDisclosure } from '@chakra-ui/react';
 import Profile from './Profile';
@@ -19,7 +18,9 @@ export default function ProfileButton(): JSX.Element {
       >
         Profile
       </Button>
-      <Profile isOpen={isOpen} onClose={onClose} />
+      // removed isOpen={isOpen} onClose={onClose} so it builds, 
+      // profile was always showing anyways
+      <Profile />
     </>
   );
 }

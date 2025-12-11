@@ -44,6 +44,8 @@ import TicTacToeAreaController from './interactable/TicTacToeAreaController';
 import ViewingAreaController from './interactable/ViewingAreaController';
 import PlayerController from './PlayerController';
 
+type UserStatus = 'Online' | 'Busy' | 'Offline';
+
 const CALCULATE_NEARBY_PLAYERS_DELAY_MS = 300;
 const SOCKET_COMMAND_TIMEOUT_MS = 5000;
 
@@ -837,7 +839,7 @@ export default class TownController extends (EventEmitter as new () => TypedEmit
   /**
    * Get the current user's friend list
    */
-  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: string; friendTownID?: string; friendTownName?: string }>> {
+  public async getFriends(): Promise<Array<{ friendId: string; friendUserName: string; friendStatus?: UserStatus; friendTownID?: string; friendTownName?: string }>> {
     const url = process.env.NEXT_PUBLIC_TOWNS_SERVICE_URL;
     const response = await fetch(`${url}/towns/${this.townID}/friends`, {
       method: 'GET',
