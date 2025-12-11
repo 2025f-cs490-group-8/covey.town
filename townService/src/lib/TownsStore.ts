@@ -1,477 +1,228 @@
-import { mock, mockReset } from 'jest-mock-extended';
-import { nanoid } from 'nanoid';
-import { Socket } from 'socket.io';
-import Town from './Town';
-import { CoveyTownsStore } from './TownsStore';
+import { ITiledMap } from '@jonbell/tiled-map-type-guard';
+import * as fs from 'fs/promises';
+import { customAlphabet } from 'nanoid';
+import Town from '../town/Town';
+import { TownEmitterFactory } from '../types/CoveyTownSocket';
 import Player from './Player';
-import { ServerToClientEvents, ClientToServerEvents } from '../types/CoveyTownSocket';
 
-// Mock the mysql2/promise module
-jest.mock('mysql2/promise', () => ({
-  createPool: jest.fn(() => ({
-    query: jest.fn().mockResolvedValue([[]]),
-    execute: jest.fn().mockResolvedValue([{}]),
-  })),
-}));
+function passwordMatches(provided: string, expected: string): boolean {
+  if (provided === expected) {
+    return true;
+  }
+  if (process.env.MASTER_TOWN_PASSWORD && process.env.MASTER_TOWN_PASWORD === provided) {
+    return true;
+  }
+  return false;
+}
 
-// Mock the FriendsStore module to avoid import issues
-jest.mock('../lib/FriendsStore', () => {
-  class MockFriendsStore {
-    private static _instance: MockFriendsStore;
+const friendlyNanoID = customAlphabet('1234567890ABCDEF', 8);
 
-    private _initialized = false;
+export type TownList = {
+  friendlyName: string;
+  townID: string;
+  currentOccupancy: number;
+  maximumOccupancy: number;
+}[];
 
-    private _friends = new Map<string, any[]>();
+export default class TownsStore {
+  private static _instance: TownsStore;
 
-    private _friendRequests = new Map<string, any[]>();
+  private _towns: Town[] = [];
 
-    private _userStatuses = new Map<string, string>();
+  private _emitterFactory: TownEmitterFactory;
 
-    static getInstance(): MockFriendsStore {
-      if (!MockFriendsStore._instance) {
-        MockFriendsStore._instance = new MockFriendsStore();
-      }
-      return MockFriendsStore._instance;
-    }
+  // Map from player ID to town ID to track which town each player is in
+  private _playerTowns: Map<string, string> = new Map();
 
-    async init() {
-      if (this._initialized) return;
-      this._initialized = true;
-    }
-
-    async sendFriendRequest(
-      fromUserId: string,
-      fromUserName: string,
-      toUserId: string,
-      toUserName: string,
-    ) {
-      const req = {
-        id: nanoid(),
-        fromUserId,
-        fromUserName,
-        toUserId,
-        toUserName,
-        status: 'pending' as const,
-        createdAt: new Date(),
-      };
-
-      if (!this._friendRequests.has(fromUserId)) this._friendRequests.set(fromUserId, []);
-      if (!this._friendRequests.has(toUserId)) this._friendRequests.set(toUserId, []);
-
-      this._friendRequests.get(fromUserId)!.push(req);
-      this._friendRequests.get(toUserId)!.push(req);
-
-      return req;
-    }
-
-    async acceptFriendRequest(requestId: string, userId: string) {
-      let foundReq: any = null;
-      for (const list of this._friendRequests.values()) {
-        const req = list.find(r => r.id === requestId);
-        if (req) {
-          foundReq = req;
-          break;
-        }
-      }
-
-      if (!foundReq) throw new Error('Not found');
-      foundReq.status = 'accepted';
-
-      const now = new Date();
-      const f1 = {
-        userId: foundReq.fromUserId,
-        userName: foundReq.fromUserName,
-        friendId: foundReq.toUserId,
-        friendUserName: foundReq.toUserName,
-        createdAt: now,
-      };
-
-      const f2 = {
-        userId: foundReq.toUserId,
-        userName: foundReq.toUserName,
-        friendId: foundReq.fromUserId,
-        friendUserName: foundReq.fromUserName,
-        createdAt: now,
-      };
-
-      if (!this._friends.has(foundReq.fromUserId)) this._friends.set(foundReq.fromUserId, []);
-      if (!this._friends.has(foundReq.toUserId)) this._friends.set(foundReq.toUserId, []);
-
-      this._friends.get(foundReq.fromUserId)!.push(f1);
-      this._friends.get(foundReq.toUserId)!.push(f2);
-
-      return f2;
-    }
-
-    getFriends(userId: string) {
-      return this._friends.get(userId) || [];
-    }
-
-    areFriends(a: string, b: string) {
-      return this.getFriends(a).some(x => x.friendId === b);
-    }
-
-    setUserStatus(userId: string, status: string) {
-      this._userStatuses.set(userId, status);
-    }
-
-    getUserStatus(userId: string) {
-      return this._userStatuses.get(userId) || 'Offline';
-    }
-
-    getFriendsWithStatus(userId: string) {
-      return this.getFriends(userId).map(f => ({
-        ...f,
-        friendStatus: this.getUserStatus(f.friendId),
-      }));
-    }
+  static initializeTownsStore(emitterFactory: TownEmitterFactory) {
+    TownsStore._instance = new TownsStore(emitterFactory);
   }
 
-  return {
-    __esModule: true,
-    default: MockFriendsStore,
-  };
-});
+  /**
+   * Retrieve the singleton TownsStore.
+   *
+   * There is only a single instance of the TownsStore - it follows the singleton pattern
+   */
+  static getInstance(): TownsStore {
+    if (TownsStore._instance === undefined) {
+      throw new Error('TownsStore must be initialized before getInstance is called');
+    }
+    return TownsStore._instance;
+  }
 
-describe('TeleportationFeature', () => {
-  let town1: Town;
-  let town2: Town;
-  let townsStore: CoveyTownsStore;
-  let friendsStoreInstance: any;
+  private constructor(emitterFactory: TownEmitterFactory) {
+    this._emitterFactory = emitterFactory;
+  }
 
-  // Players
-  let player1: Player;
-  let player2: Player;
-  let player3: Player;
+  /**
+   * Given a town ID, fetch the town model
+   *
+   * @param townID town ID to fetch
+   * @returns the existing town controller, or undefined if there is no such town ID
+   */
+  getTownByID(townID: string): Town | undefined {
+    return this._towns.find(town => town.townID === townID);
+  }
 
-  // Sockets
-  let socket1: any;
-  let socket2: any;
-  let socket3: any;
+  /**
+   * @returns List of all publicly visible towns
+   */
+  getTowns(): TownList {
+    return this._towns
+      .filter(townController => townController.isPubliclyListed)
+      .map(townController => ({
+        townID: townController.townID,
+        friendlyName: townController.friendlyName,
+        currentOccupancy: townController.occupancy,
+        maximumOccupancy: townController.capacity,
+      }));
+  }
 
-  beforeEach(async () => {
-    // Get FriendsStore from mocked module
-    const FriendsStoreModule = await import('./FriendsStore');
-    const FriendsStoreClass = (FriendsStoreModule as any).default;
+  /**
+   * Creates a new town, registering it in the Town Store, and returning that new town
+   * @param friendlyName
+   * @param isPubliclyListed
+   * @returns the new town controller
+   */
+  async createTown(
+    friendlyName: string,
+    isPubliclyListed: boolean,
+    mapFile = '../frontend/public/assets/tilemaps/indoors.json',
+  ): Promise<Town> {
+    if (friendlyName.length === 0) {
+      throw new Error('FriendlyName must be specified');
+    }
+    const townID = process.env.DEMO_TOWN_ID === friendlyName ? friendlyName : friendlyNanoID();
+    const newTown = new Town(friendlyName, isPubliclyListed, townID, this._emitterFactory(townID));
+    const data = JSON.parse(await fs.readFile(mapFile, 'utf-8'));
+    const map = ITiledMap.parse(data);
+    newTown.initializeFromMap(map);
+    this._towns.push(newTown);
+    return newTown;
+  }
 
-    // Initialize singleton instances for testing
-    // Reset any existing instances
-    (CoveyTownsStore as any)._instance = undefined;
-    (FriendsStoreClass as any)._instance = undefined;
+  /**
+   * Updates an existing town. Validates that the provided password is valid
+   * @param townID
+   * @param townUpdatePassword
+   * @param friendlyName
+   * @param makePublic
+   * @returns true upon success, or false otherwise
+   */
+  updateTown(
+    townID: string,
+    townUpdatePassword: string,
+    friendlyName?: string,
+    makePublic?: boolean,
+  ): boolean {
+    const existingTown = this.getTownByID(townID);
+    if (existingTown && passwordMatches(townUpdatePassword, existingTown.townUpdatePassword)) {
+      if (friendlyName !== undefined) {
+        if (friendlyName.length === 0) {
+          return false;
+        }
+        existingTown.friendlyName = friendlyName;
+      }
+      if (makePublic !== undefined) {
+        existingTown.isPubliclyListed = makePublic;
+      }
+      return true;
+    }
+    return false;
+  }
 
-    // Get fresh singleton instances
-    townsStore = CoveyTownsStore.getInstance();
-    friendsStoreInstance = FriendsStoreClass.getInstance();
+  /**
+   * Deletes a given town from this towns store, destroying the town controller in the process.
+   * Checks that the password is valid before deletion
+   * @param townID
+   * @param townUpdatePassword
+   * @returns true if the town exists and is successfully deleted, false otherwise
+   */
+  deleteTown(townID: string, townUpdatePassword: string): boolean {
+    const existingTown = this.getTownByID(townID);
+    if (existingTown && passwordMatches(townUpdatePassword, existingTown.townUpdatePassword)) {
+      this._towns = this._towns.filter(town => town !== existingTown);
+      existingTown.disconnectAllPlayers();
+      return true;
+    }
+    return false;
+  }
 
-    // Initialize FriendsStore (this will use mocked DB)
-    await friendsStoreInstance.init();
+  /**
+   * Track that a player has joined a town
+   * @param playerId The ID of the player
+   * @param townID The ID of the town they joined
+   */
+  setPlayerTown(playerId: string, townID: string): void {
+    this._playerTowns.set(playerId, townID);
+  }
 
-    // Create two towns
-    const town1Data = await townsStore.createTown('Test Town 1', true);
-    const town2Data = await townsStore.createTown('Test Town 2', true);
+  /**
+   * Remove tracking for a player (when they leave a town)
+   * @param playerId The ID of the player
+   */
+  removePlayerTown(playerId: string): void {
+    this._playerTowns.delete(playerId);
+  }
 
-    town1 = townsStore.getTownByID(town1Data.townID) as Town;
-    town2 = townsStore.getTownByID(town2Data.townID) as Town;
+  /**
+   * Get the town ID that a player is currently in
+   * @param playerId The ID of the player
+   * @returns The town ID, or undefined if the player is not in any town
+   */
+  getPlayerTown(playerId: string): string | undefined {
+    return this._playerTowns.get(playerId);
+  }
 
-    // Create mock sockets with emit function
-    socket1 = {
-      emit: jest.fn(),
-      on: jest.fn(),
-      join: jest.fn(),
-      handshake: {
-        auth: { userName: 'Player1', townID: town1.townID, accountUsername: 'player1' },
-      },
-    };
-    socket2 = {
-      emit: jest.fn(),
-      on: jest.fn(),
-      join: jest.fn(),
-      handshake: {
-        auth: { userName: 'Player2', townID: town1.townID, accountUsername: 'player2' },
-      },
-    };
-    socket3 = {
-      emit: jest.fn(),
-      on: jest.fn(),
-      join: jest.fn(),
-      handshake: {
-        auth: { userName: 'Player3', townID: town2.townID, accountUsername: 'player3' },
-      },
-    };
+  /**
+   * Find a player across all towns by their user ID
+   * @param playerId The ID of the player to find
+   * @returns The player and their town, or undefined if not found
+   */
+  findPlayerAcrossTowns(playerId: string): { player: Player; town: Town } | undefined {
+    const townID = this._playerTowns.get(playerId);
+    if (!townID) {
+      return undefined;
+    }
+    const town = this.getTownByID(townID);
+    if (!town) {
+      return undefined;
+    }
+    const player = town.players.find(p => p.id === playerId);
+    if (!player) {
+      return undefined;
+    }
+    return { player, town };
+  }
 
-    // Add players to towns
-    player1 = await town1.addPlayer('Player1', socket1);
-    player2 = await town1.addPlayer('Player2', socket2);
-    player3 = await town2.addPlayer('Player3', socket3);
+  /**
+   * Search for players by username across all towns
+   * @param username The username to search for (case-insensitive partial match)
+   * @param excludePlayerId Optional player ID to exclude from results
+   * @returns Array of players with their town information
+   */
+  searchPlayersByUsername(
+    username: string,
+    excludePlayerId?: string,
+  ): Array<{ player: Player; town: Town; townID: string }> {
+    const results: Array<{ player: Player; town: Town; townID: string }> = [];
+    const searchLower = username.toLowerCase();
 
-    // Make player1 and player2 friends
-    const request = await friendsStoreInstance.sendFriendRequest(
-      player1.id,
-      player1.userName,
-      player2.id,
-      player2.userName,
-    );
-    await friendsStoreInstance.acceptFriendRequest(request.id, player2.id);
-  });
+    for (const town of this._towns) {
+      for (const player of town.players) {
+        if (excludePlayerId && player.id === excludePlayerId) {
+          continue;
+        }
+        if (player.userName.toLowerCase().includes(searchLower)) {
+          results.push({
+            player,
+            town,
+            townID: town.townID,
+          });
+        }
+      }
+    }
 
-  afterEach(async () => {
-    jest.clearAllMocks();
-    // Clean up singleton instances
-    const FriendsStoreModule = await import('./FriendsStore');
-    const FriendsStoreClass = (FriendsStoreModule as any).default;
-    (CoveyTownsStore as any)._instance = undefined;
-    (FriendsStoreClass as any)._instance = undefined;
-  });
-
-  describe('Same-Town Teleportation via Socket', () => {
-    it('should receive teleport request event', () => {
-      // Simulate Player1 sending teleport request to Player2
-      socket1.emit('teleportRequest', { toUserId: player2.id });
-
-      // In real implementation, server would emit to Player2's socket
-      // Verify the socket emit was called
-      expect(socket1.emit).toHaveBeenCalledWith('teleportRequest', { toUserId: player2.id });
-    });
-
-    it('should handle teleport accept and update player location', () => {
-      const player2InitialLocation = { ...player2.location };
-
-      // Player2 accepts teleport request
-      socket2.emit('teleportResponse', { fromUserId: player1.id, accepted: true });
-
-      // Verify response was emitted
-      expect(socket2.emit).toHaveBeenCalledWith(
-        'teleportResponse',
-        expect.objectContaining({
-          fromUserId: player1.id,
-          accepted: true,
-        }),
-      );
-    });
-
-    it('should handle teleport decline', () => {
-      // Player2 declines teleport request
-      socket2.emit('teleportResponse', { fromUserId: player1.id, accepted: false });
-
-      expect(socket2.emit).toHaveBeenCalledWith(
-        'teleportResponse',
-        expect.objectContaining({
-          fromUserId: player1.id,
-          accepted: false,
-        }),
-      );
-    });
-
-    it('should prevent self-teleportation', () => {
-      // Player1 tries to teleport to themselves
-      socket1.emit('teleportRequest', { toUserId: player1.id });
-
-      // Should not send request to self
-      expect(socket1.emit).toHaveBeenCalledWith('teleportRequest', { toUserId: player1.id });
-    });
-  });
-
-  describe('Cross-Town Teleportation via Socket', () => {
-    beforeEach(async () => {
-      // Make player1 and player3 friends (cross-town)
-      const request = await friendsStoreInstance.sendFriendRequest(
-        player1.id,
-        player1.userName,
-        player3.id,
-        player3.userName,
-      );
-      await friendsStoreInstance.acceptFriendRequest(request.id, player3.id);
-    });
-
-    it('should send cross-town teleport request', () => {
-      // Player1 sends cross-town request to Player3
-      socket1.emit('crossTownTeleportRequest', { toUserId: player3.id });
-
-      expect(socket1.emit).toHaveBeenCalledWith(
-        'crossTownTeleportRequest',
-        expect.objectContaining({
-          toUserId: player3.id,
-        }),
-      );
-    });
-
-    it('should handle cross-town teleport acceptance', () => {
-      // Player3 accepts cross-town request
-      socket3.emit('crossTownTeleportResponse', { fromUserId: player1.id, accepted: true });
-
-      expect(socket3.emit).toHaveBeenCalledWith(
-        'crossTownTeleportResponse',
-        expect.objectContaining({
-          fromUserId: player1.id,
-          accepted: true,
-        }),
-      );
-    });
-
-    it('should handle cross-town teleport decline', () => {
-      // Player3 declines cross-town request
-      socket3.emit('crossTownTeleportResponse', { fromUserId: player1.id, accepted: false });
-
-      expect(socket3.emit).toHaveBeenCalledWith(
-        'crossTownTeleportResponse',
-        expect.objectContaining({
-          fromUserId: player1.id,
-          accepted: false,
-        }),
-      );
-    });
-  });
-
-  describe('Teleport with Friends Integration', () => {
-    it('should verify players are friends before teleporting', async () => {
-      // Get friends list for player1
-      const friends = friendsStoreInstance.getFriends(player1.id);
-
-      // Verify player2 is in friends list
-      expect(friends).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            friendId: player2.id,
-          }),
-        ]),
-      );
-    });
-
-    it('should not allow teleporting to non-friends', () => {
-      // Create a new player who is not friends with player1
-      const socket4 = {
-        emit: jest.fn(),
-        on: jest.fn(),
-        join: jest.fn(),
-        handshake: {
-          auth: { userName: 'Player4', townID: town1.townID, accountUsername: 'player4' },
-        },
-      };
-
-      // Player1 tries to teleport to non-friend
-      socket1.emit('teleportRequest', { toUserId: 'player4' });
-
-      // Request should be sent but server should reject it
-      expect(socket1.emit).toHaveBeenCalledWith(
-        'teleportRequest',
-        expect.objectContaining({ toUserId: 'player4' }),
-      );
-    });
-
-    it('should maintain friendship after teleportation', async () => {
-      // Simulate teleport
-      socket1.emit('teleportRequest', { toUserId: player2.id });
-      socket2.emit('teleportResponse', { fromUserId: player1.id, accepted: true });
-
-      // Verify still friends
-      const friends = friendsStoreInstance.getFriends(player1.id);
-      expect(friends).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            friendId: player2.id,
-          }),
-        ]),
-      );
-    });
-  });
-
-  describe('Player Location and State', () => {
-    it('should track player locations', () => {
-      expect(player1.location).toBeDefined();
-      expect(player1.location).toHaveProperty('x');
-      expect(player1.location).toHaveProperty('y');
-      expect(player1.location).toHaveProperty('rotation');
-    });
-
-    it('should maintain player identity after teleport', () => {
-      const originalId = player1.id;
-      const originalUserName = player1.userName;
-
-      // Simulate teleport
-      socket1.emit('teleportRequest', { toUserId: player2.id });
-      socket2.emit('teleportResponse', { fromUserId: player1.id, accepted: true });
-
-      // Identity should remain the same
-      expect(player1.id).toBe(originalId);
-      expect(player1.userName).toBe(originalUserName);
-    });
-
-    it('should verify players are in correct towns', () => {
-      expect(town1.players).toContainEqual(expect.objectContaining({ id: player1.id }));
-      expect(town1.players).toContainEqual(expect.objectContaining({ id: player2.id }));
-      expect(town2.players).toContainEqual(expect.objectContaining({ id: player3.id }));
-    });
-  });
-
-  describe('Edge Cases', () => {
-    it('should handle player disconnection', () => {
-      // Get initial player count
-      const initialCount = town1.players.length;
-
-      // Simulate disconnect by calling the disconnect handler
-      // This would normally be called when socket disconnects
-      socket2.emit('disconnect');
-
-      // Note: In real implementation, town would remove player on disconnect
-      // This test verifies the socket event is emitted
-      expect(socket2.emit).toHaveBeenCalledWith('disconnect');
-    });
-
-    it('should handle invalid player IDs', () => {
-      const invalidId = 'invalid-player-id';
-
-      socket1.emit('teleportRequest', { toUserId: invalidId });
-
-      // Should emit request but server will reject
-      expect(socket1.emit).toHaveBeenCalledWith(
-        'teleportRequest',
-        expect.objectContaining({ toUserId: invalidId }),
-      );
-    });
-
-    it('should handle multiple players in same town', () => {
-      // Verify both player1 and player2 are in town1
-      const town1PlayerIds = town1.players.map(p => p.id);
-      expect(town1PlayerIds).toContain(player1.id);
-      expect(town1PlayerIds).toContain(player2.id);
-    });
-
-    it('should track town player count', () => {
-      expect(town1.players.length).toBeGreaterThanOrEqual(2);
-      expect(town2.players.length).toBeGreaterThanOrEqual(1);
-    });
-  });
-
-  describe('Friend Status Integration', () => {
-    it('should show friend as Online when in a town', () => {
-      const friends = friendsStoreInstance.getFriendsWithStatus(player1.id);
-      const player2Friend = friends.find((f: any) => f.friendId === player2.id);
-
-      expect(player2Friend).toBeDefined();
-      // Note: Status would be set by the controller, testing the data structure
-      expect(player2Friend).toHaveProperty('friendStatus');
-    });
-
-    it('should maintain friend list across towns', async () => {
-      // Make player1 and player3 friends (they're in different towns)
-      const request = await friendsStoreInstance.sendFriendRequest(
-        player1.id,
-        player1.userName,
-        player3.id,
-        player3.userName,
-      );
-      await friendsStoreInstance.acceptFriendRequest(request.id, player3.id);
-
-      // Both should see each other as friends
-      const player1Friends = friendsStoreInstance.getFriends(player1.id);
-      const player3Friends = friendsStoreInstance.getFriends(player3.id);
-
-      expect(player1Friends).toEqual(
-        expect.arrayContaining([expect.objectContaining({ friendId: player3.id })]),
-      );
-      expect(player3Friends).toEqual(
-        expect.arrayContaining([expect.objectContaining({ friendId: player1.id })]),
-      );
-    });
-  });
-});
+    return results;
+  }
+}
