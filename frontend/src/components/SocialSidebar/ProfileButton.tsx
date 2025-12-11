@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
-import { Button, useDisclosure } from '@chakra-ui/react';
+import React from 'react';
+import Button from '@chakra-ui/react';
 import Profile from './Profile';
 
 export default function ProfileButton(): JSX.Element {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  // const { isOpen, onOpen, onClose } = useDisclosure();
 
   return (
     <>
       <Button
-        colorScheme="blue"
-        size="sm"
-        position="fixed"
-        top="10px"
-        right="20px"
+        colorScheme='blue'
+        size='sm'
+        position='fixed'
+        top='10px'
+        right='20px'
         zIndex={999}
-        onClick={onOpen}
-      >
+        onClick={onOpen}>
         Profile
       </Button>
-      // removed isOpen={isOpen} onClose={onClose} so it builds, 
-      // profile was always showing anyways
+      {/* removed isOpen={isOpen} onClose={onClose} so it builds */}
+      {/* profile was always showing*/}
+      anyways
       <Profile />
     </>
   );

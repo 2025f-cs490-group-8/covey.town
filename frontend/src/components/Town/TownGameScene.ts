@@ -411,16 +411,23 @@ export default class TownGameScene extends Phaser.Scene {
     // Create a sprite with physics enabled via the physics system. The image used for the sprite
     // has a bit of whitespace, so I'm using setSize & setOffset to control the size of the
     // player's body.
-    
+
     // Use player's actual location if set (for cross-town teleport), otherwise use map spawn point
     const playerLocation = this.coveyTownController.ourPlayer.location;
     console.log('TownGameScene create: ourPlayer.location =', playerLocation);
     console.log('TownGameScene create: map spawnPoint =', { x: spawnPoint.x, y: spawnPoint.y });
-    const startX = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.x : spawnPoint.x;
-    const startY = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.y : spawnPoint.y;
-    const startRotation = (playerLocation.x !== 0 || playerLocation.y !== 0) ? playerLocation.rotation : 'front';
-    console.log('TownGameScene create: using start position =', { x: startX, y: startY, rotation: startRotation });
-    
+    const startX =
+      playerLocation.x !== 0 || playerLocation.y !== 0 ? playerLocation.x : spawnPoint.x;
+    const startY =
+      playerLocation.x !== 0 || playerLocation.y !== 0 ? playerLocation.y : spawnPoint.y;
+    const startRotation =
+      playerLocation.x !== 0 || playerLocation.y !== 0 ? playerLocation.rotation : 'front';
+    console.log('TownGameScene create: using start position =', {
+      x: startX,
+      y: startY,
+      rotation: startRotation,
+    });
+
     const sprite = this.physics.add
       .sprite(startX, startY, 'atlas', `misa-${startRotation}`)
       .setSize(30, 40)

@@ -12,7 +12,6 @@ import clsx from 'clsx';
 import { createStyles, makeStyles, Theme } from '@material-ui/core';
 import ProfileButton from '../SocialSidebar/ProfileButton';
 
-
 const useStyles = makeStyles((theme: Theme) =>
   createStyles({
     chatWindowContainer: {
@@ -84,7 +83,6 @@ export default function TownMap(): JSX.Element {
   }, [coveyTownController]);
 
   return (
-    
     <div id='app-container'>
       <NewConversationModal />
       <GameAreaWrapper />

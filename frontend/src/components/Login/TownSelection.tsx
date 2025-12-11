@@ -50,7 +50,7 @@ export default function TownSelection(): JSX.Element {
   const { setTownController, townsService, accountUsername } = loginController;
   const { connect: videoConnect } = useVideoContext();
 
-      console.log('TownSelection - accountUsername from loginController:', accountUsername);
+  console.log('TownSelection - accountUsername from loginController:', accountUsername);
 
   const toast = useToast();
 
@@ -67,11 +67,11 @@ export default function TownSelection(): JSX.Element {
     };
   }, [updateTownListings]);
 
-    useEffect(() => {
-      if (!userName && accountUsername) {
-        setUserName(accountUsername);
-      }
-    }, [accountUsername, userName]);
+  useEffect(() => {
+    if (!userName && accountUsername) {
+      setUserName(accountUsername);
+    }
+  }, [accountUsername, userName]);
 
   const handleJoin = useCallback(
     async (coveyRoomID: string) => {
@@ -269,14 +269,14 @@ export default function TownSelection(): JSX.Element {
             <FormControl>
               <FormLabel htmlFor='name'>Name</FormLabel>
               <Input
-               autoFocus
+                autoFocus
                 name='name'
                 placeholder='Your name'
                 value={userName}
                 onChange={event => setUserName(event.target.value)}
-                isReadOnly={!!accountUsername}  
-                bg={accountUsername ? 'gray.100' : 'white'}  
-                cursor={accountUsername ? 'not-allowed' : 'text'} 
+                isReadOnly={!!accountUsername}
+                bg={accountUsername ? 'gray.100' : 'white'}
+                cursor={accountUsername ? 'not-allowed' : 'text'}
               />
             </FormControl>
           </Box>
