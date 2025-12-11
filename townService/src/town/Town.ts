@@ -691,6 +691,40 @@ export default class Town {
         //   'Cross-town teleport: Sending spawnLocation to requesting player:',
         //   targetLocation,
         // );
+        console.log('Cross-town teleport: Accepting player location:', targetLocation);
+        const offset = 60;
+        let spawnX = targetLocation.x;
+        let spawnY = targetLocation.y;
+
+        switch (targetLocation.rotation) {
+          case 'front':
+            spawnY = targetLocation.y + offset;
+            break;
+          case 'back':
+            spawnY = targetLocation.y - offset;
+            break;
+          case 'left':
+            spawnX = targetLocation.x - offset;
+            break;
+          case 'right':
+            spawnX = targetLocation.x + offset;
+            break;
+          default:
+            spawnX = targetLocation.x + offset;
+            spawnY = targetLocation.y + offset / 2;
+            break;
+        }
+
+        const spawnLocation = {
+          x: spawnX,
+          y: spawnY,
+          rotation: targetLocation.rotation,
+          moving: false,
+        };
+        console.log(
+          'Cross-town teleport: Sending spawnLocation to requesting player:',
+          spawnLocation,
+        );
 
         // Notify the requesting player that their request was accepted, include spawn location
         // They will switch to this town and spawn at the specified location
