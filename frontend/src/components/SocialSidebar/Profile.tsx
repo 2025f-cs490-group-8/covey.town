@@ -86,6 +86,10 @@ export default function Profile(): JSX.Element {
   const { connect: videoConnect, room: videoRoom, getAudioAndVideoTracks } = useVideoContext();
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
+  const hoverBgColor = useColorModeValue('gray.50', 'gray.700');
+  const friendBlockedBg = useColorModeValue('red.50', 'red.900');
+  const friendBlockedHoverBg = useColorModeValue('red.100', 'red.800');
+  const friendRequestHoverBg = useColorModeValue('gray.50', 'gray.700');
   const toast = useToast();
   const { isOpen, onOpen, onClose } = useDisclosure();
   const players = usePlayers();
@@ -531,9 +535,9 @@ export default function Profile(): JSX.Element {
         townController.disconnect();
 
         // Create new town controller and connect with spawn location
-        const TownController = (await import('../../classes/TownController')).default;
+        const townControllerReplacement = (await import('../../classes/TownController')).default;
         console.log('Creating TownController with spawnLocation:', spawnLocation);
-        const newController = new TownController({
+        const newController = new townControllerReplacement({
           userName: username,
           townID: townID,
           loginController,
@@ -795,15 +799,15 @@ export default function Profile(): JSX.Element {
       if (result.friendRestored && result.friend) {
         setFriends(prev => {
           // Check if they're not already in the list
-          if (!prev.some(f => f.friendId === result.friend!.friendId)) {
+          if (result.friend && !prev.some(f => f.friendId === result.friend.friendId)) {
             return [
               ...prev,
               {
-                friendId: result.friend!.friendId,
-                friendUserName: result.friend!.friendUserName,
-                friendStatus: result.friend!.friendStatus as UserStatus,
-                friendTownID: result.friend!.friendTownID,
-                friendTownName: result.friend!.friendTownName,
+                friendId: result.friend.friendId,
+                friendUserName: result.friend.friendUserName,
+                friendStatus: result.friend.friendStatus as UserStatus,
+                friendTownID: result.friend.friendTownID,
+                friendTownName: result.friend.friendTownName,
               },
             ];
           }
@@ -1155,7 +1159,7 @@ export default function Profile(): JSX.Element {
                     borderWidth='1px'
                     borderRadius='md'
                     borderColor={borderColor}
-                    _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                    _hover={{ bg: friendRequestHoverBg }}>
                     <Flex align='center'>
                       <Avatar size='sm' name={request.fromUserName} mr={3} />
                       <Box flex={1}>
@@ -1236,13 +1240,9 @@ export default function Profile(): JSX.Element {
                     borderWidth='1px'
                     borderRadius='md'
                     borderColor={friend.isBlockedByFriend ? 'red.300' : borderColor}
-                    bg={
-                      friend.isBlockedByFriend ? useColorModeValue('red.50', 'red.900') : undefined
-                    }
+                    bg={friend.isBlockedByFriend ? friendBlockedBg : undefined}
                     _hover={{
-                      bg: friend.isBlockedByFriend
-                        ? useColorModeValue('red.100', 'red.800')
-                        : useColorModeValue('gray.50', 'gray.700'),
+                      bg: friend.isBlockedByFriend ? friendBlockedHoverBg : friendRequestHoverBg,
                     }}>
                     <Flex align='center'>
                       <Avatar
@@ -1385,7 +1385,7 @@ export default function Profile(): JSX.Element {
                   borderWidth='1px'
                   borderRadius='md'
                   borderColor={borderColor}
-                  bg={useColorModeValue('red.50', 'red.900')}>
+                  bg={blockedUsersBg}>
                   <Flex align='center'>
                     <Avatar size='sm' name={blockedUser.blockedUserName} mr={3} />
                     <Box flex={1}>
@@ -1457,7 +1457,7 @@ export default function Profile(): JSX.Element {
                       borderWidth='1px'
                       borderRadius='md'
                       borderColor={borderColor}
-                      _hover={{ bg: useColorModeValue('gray.50', 'gray.700') }}>
+                      _hover={{ bg: friendRequestHoverBg }}>
                       <Flex align='center'>
                         <Avatar size='sm' name={player.userName} mr={3} />
                         <Box flex={1}>

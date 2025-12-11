@@ -1,9 +1,9 @@
 import React from 'react';
-import Button from '@chakra-ui/react';
+import { Button, useDisclosure } from '@chakra-ui/react';
 import Profile from './Profile';
 
 export default function ProfileButton(): JSX.Element {
-  // const { isOpen, onOpen, onClose } = useDisclosure();
+  const onOpen = useDisclosure();
 
   return (
     <>
