@@ -69,7 +69,9 @@ Create a `.env` file in the `frontend` directory with the following environment 
 | ------------                    | -----------                      | -------------                                                                |
 | `NEXT_PUBLIC_TOWNS_SERVICE_URL` | URL of the backend towns service | `http://localhost:8081` (for local development) or your deployed backend URL |
 
-#### Optional Environment Variables (Make sure to create `.env.local` file in the `frontend` directory)
+For ease of debugging, you might also set the environmental variable `NEXT_PUBLIC_TOWN_DEV_MODE=true`. When set to `true`, the frontend will automatically connect to the town with the friendly name "DEBUG_TOWN" (creating one if needed), and will *not* try to connect to the Twilio API. This is useful if you want to quickly test changes to the frontend (reloading the page and re-acquiring video devices can be much slower than re-loading without Twilio).
+
+#### Another Required Environment Variables (Make sure to create `.env.local` file in the `frontend` directory)
 
 | Config Value                       | Description                      | Where to find                                                                |
 | ------------                       | -----------                      | -------------                                                                |
